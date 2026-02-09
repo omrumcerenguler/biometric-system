@@ -1,0 +1,33 @@
+cat > .gitignore <<'EOF'
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.dist/
+.build/
+.venv/
+venv/
+backend/venv/
+
+# Env / Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Logs
+*.log
+*.log.jsonl
+
+# Node (eğer ileride olursa)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+EOF

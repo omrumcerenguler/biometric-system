@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Multi-Modal Biometric Auth</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- STEP 1: COMPANY -->
+    <div class="card" id="step-company">
+      <h2>Choose a Company</h2>
+      <button class="btn" onclick="selectCompany('A')">Company A</button>
+      <button class="btn" onclick="selectCompany('B')">Company B</button>
+      <button class="btn" onclick="selectCompany('C')">Company C</button>
+    </div>
+
+    <!-- STEP 2: IDENTIFICATION TYPE -->
+    <div class="card hidden" id="step-method">
+      <h2>Choose the Type of Identification</h2>
+      <button class="btn" onclick="selectMethod('face')">Face Recognition</button>
+      <button class="btn" onclick="selectMethod('voice')">Voice Recognition</button>
+    </div>
+
+    <!-- STEP 3: FACE CAPTURE -->
+    <div class="card hidden" id="step-face">
+      <h2>Visual Identification</h2>
+      <p>Please look at the camera</p>
+
+      <video id="video" autoplay></video>
+      <canvas id="canvas" class="hidden"></canvas>
+
+      <button class="btn" onclick="captureFace()">Capture</button>
+    </div>
+
+    <!-- STEP 3B: VOICE -->
+<div class="card hidden" id="step-voice">
+  <h2>Voice Identification</h2>
+  <p>Please speak for 3-5 seconds</p>
+
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button class="btn" id="btn-voice-start" onclick="startVoiceRecord()">Start</button>
+    <button class="btn" id="btn-voice-stop" onclick="stopVoiceRecord()" disabled>Stop</button>
+    <button class="btn" id="btn-voice-send" onclick="sendVoice()" disabled>Send</button>
+  </div>
+
+  <audio id="audio-preview" class="hidden" controls style="margin-top:16px; width:100%;"></audio>
+</div>
+
+
+    <!-- STEP 4: RESULT -->
+<div class="card hidden" id="step-result">
+  <h2>Authentication Result</h2>
+
+  <p id="result-decision"></p>
+
+  <div class="score-box">
+    <p>Face Score: <span id="face-score"></span></p>
+    <p>Voice Score: <span id="voice-score"></span></p>
+    <p>Fusion Score: <span id="fusion-score"></span></p>
+  </div>
+
+  <button class="btn" onclick="restart()">Restart</button>
+</div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
