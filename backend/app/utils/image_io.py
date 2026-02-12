@@ -2,16 +2,21 @@ import base64
 import cv2
 import numpy as np
 
-def b64_to_bgr_image(b64_str: str) -> np.ndarray:
-    if not b64_str or not isinstance(b64_str, str):
-        raise ValueError("FACE_B64_MISSING")
 
-    try:
-        raw = base64.b64decode(b64_str)
-        arr = np.frombuffer(raw, dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        if img is None:
-            raise ValueError("FACE_DECODE_FAILED")
-        return img
-    except Exception as e:
-        raise ValueError(f"FACE_B64_INVALID: {e}")
+def b64_to_bgr_image(face_b64: str) -> np.ndarray:
+    """
+    Accepts:
+      - raw base64 (no prefix)
+      - data-url base64: 'data:image/jpeg;base64,...'
+    Returns:
+      - OpenCV BGR image (np.ndarray)
+    """
+    if "," in face_b64 and face_b64.strip().lower().startswith("data:"):
+        face_b64 = face_b64.split(",", 1)[1]
+
+    raw = base64.b64decode(face_b64)
+    arr = np.frombuffer(raw, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("cv2.imdecode returned None")
+    return img

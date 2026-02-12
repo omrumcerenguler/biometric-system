@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,23 +8,70 @@ from app.services.authentication_service import AuthenticationService
 from app.utils.audio_io import b64_to_wav_mono
 from app.utils.image_io import b64_to_bgr_image
 
+import numpy as np
+
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
+# ✅ Singleton service (state machine continuity)
+_auth_service = AuthenticationService()
+
+
+# =========================
+# REQUEST MODELS
+# =========================
+
+class LivenessStartIn(BaseModel):
+    username: str
+
+
+class LivenessUpdateIn(BaseModel):
+    username: str
+    face_b64: str  # base64 JPEG/PNG (data-url olabilir)
+
+
+# =========================
+# HELPERS
+# =========================
 
 def _bad_request(msg: str):
     raise HTTPException(status_code=400, detail=msg)
 
 
-# ✅ IMPORTANT: singleton service (state machine / sessions should persist)
-_auth_service = AuthenticationService()
+# =========================
+# LIVENESS ENDPOINTS
+# =========================
 
+@router.post("/liveness/start")
+async def liveness_start(payload: LivenessStartIn):
+    res = _auth_service.start_face_liveness(payload.username)
+
+    return {
+        "status": "IN_PROGRESS",
+        "step": res["step"],
+        "instruction": res["instruction"],
+    }
+
+
+@router.post("/liveness/update")
+async def liveness_update(payload: LivenessUpdateIn):
+    try:
+        img = b64_to_bgr_image(payload.face_b64)
+    except ValueError as e:
+        _bad_request(f"INVALID_FACE_IMAGE: {e}")
+
+    result = _auth_service.update_face_liveness(payload.username, img)
+    return result
+
+
+# =========================
+# FINAL VERIFY
+# =========================
 
 @router.post("/verify", response_model=VerifyResponse)
 async def verify(req: VerifyRequest, session: AsyncSession = Depends(get_session)):
-    # We keep session ready for future DB use,
-    # but the service instance is singleton for liveness state continuity.
 
-    # 1) Decode only if provided
     face_img = None
     if req.face_image_b64:
         try:
@@ -35,8 +83,6 @@ async def verify(req: VerifyRequest, session: AsyncSession = Depends(get_session
     sr = None
     if req.voice_wav_b64:
         try:
-            # NOTE: frontend MediaRecorder usually sends WEBM/OGG, not WAV.
-            # This function expects WAV base64.
             audio, sr = b64_to_wav_mono(req.voice_wav_b64)
         except ValueError as e:
             _bad_request(
@@ -46,11 +92,9 @@ async def verify(req: VerifyRequest, session: AsyncSession = Depends(get_session
                 f"Details: {e}"
             )
 
-    # 2) Require at least one modality
     if face_img is None and audio is None:
         _bad_request("NO_INPUT: provide face_image_b64 and/or voice_wav_b64")
 
-    # 3) Run verification with available modalities
     result = await _auth_service.verify(
         username=req.username,
         face_img=face_img,
