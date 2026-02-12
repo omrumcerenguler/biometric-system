@@ -186,3 +186,12 @@ class AuthenticationService:
 
         score = 0.45 * rms_ok + 0.30 * flat_ok + 0.25 * zcr_ok
         return float(max(0.0, min(1.0, score)))
+
+#yeni
+def start_face_liveness(self, username: str):
+    machine = FaceLivenessStateMachine()
+    self._face_sessions[username] = machine
+    return {
+        "step": machine.current_step().value,
+        "instruction": machine.instruction(),
+    }
