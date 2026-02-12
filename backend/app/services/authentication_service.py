@@ -94,6 +94,14 @@ class AuthenticationService:
                 "eye_open": float(eye_avg),
             },
         }
+    
+    def is_liveness_passed(self, username: str) -> bool:
+        machine = self._face_sessions.get(username)
+        if machine is None:
+            return False
+        st = machine.state
+        return bool(st.done and not st.failed)
+
 
     def _is_face_liveness_passed(self, username: str) -> bool:
         machine = self._face_sessions.get(username)
@@ -202,6 +210,11 @@ class AuthenticationService:
             f"fusion_thr={self.fusion_thr:.2f} | "
             f"liveness_passed={str(face_liveness_passed).lower()}"
         )
+
+        # Clear liveness session on success
+        if decision == "GRANTED" and username in self._face_sessions:
+            self._face_sessions.pop(username, None)
+
 
         return {
             "decision": decision,
