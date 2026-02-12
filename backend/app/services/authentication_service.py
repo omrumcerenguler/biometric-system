@@ -195,3 +195,39 @@ def start_face_liveness(self, username: str):
         "step": machine.current_step().value,
         "instruction": machine.instruction(),
     }
+
+
+def update_face_liveness(self, username: str, face_img: np.ndarray) -> dict:
+    feats = self.face.extract_features(face_img)
+
+    eye_avg = (feats.left_eye_open_norm + feats.right_eye_open_norm) / 2.0
+
+    machine = self._face_sessions.get(username)
+    if machine is None:
+        machine = FaceLivenessStateMachine()
+        self._face_sessions[username] = machine
+
+    prev_step = machine.current_step().value if machine.current_step() is not None else None
+
+    state = machine.update(
+        nose_x=float(feats.nose_x_norm),
+        eye_open_ratio=float(eye_avg),
+        face_detected=True,
+    )
+
+    cur_step = machine.current_step().value if machine.current_step() is not None else None
+
+    passed_step = (prev_step != cur_step) or (state.done and not state.failed)
+
+    return {
+        "status": "PASSED" if (state.done and not state.failed) else ("FAILED" if state.failed else "IN_PROGRESS"),
+        "step": cur_step,
+        "instruction": machine.instruction(),
+        "done": bool(state.done),
+        "failed": bool(state.failed),
+        "passed_step": bool(passed_step),
+        "debug": {
+            "nose_x": float(feats.nose_x_norm),
+            "eye_open": float(eye_avg),
+        },
+    }
