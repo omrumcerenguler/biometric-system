@@ -33,3 +33,8 @@ class VerifyResponse(BaseModel):
     face_score: float
     voice_score: float
     reason: str
+
+    # ✅ optional extras (for face liveness flow)
+    face_liveness_step: Optional[str] = None
+    face_liveness_instruction: Optional[str] = None
+    face_liveness_passed: Optional[bool] = None
