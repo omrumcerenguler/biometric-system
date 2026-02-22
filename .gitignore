@@ -2,6 +2,12 @@ cat > .gitignore <<'EOF'
 # macOS
 .DS_Store
 
+#db
+*.db
+
+
+
+
 # Python
 __pycache__/
 *.py[cod]

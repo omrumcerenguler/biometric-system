@@ -9,12 +9,46 @@
 
   <div class="app-container">
 
+    <!-- STEP 0: ENROLLMENT -->
+
+<div class="card hidden" id="step-enroll">
+  <h2>Enrollment</h2>
+
+  <input id="username" placeholder="username" />
+  <input id="role" placeholder="role (e.g. user)" value="user" />
+
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button class="btn" id="btnStartCam">Start Camera</button>
+    <button class="btn" id="btnStopCam">Stop Camera</button>
+  </div>
+
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:12px;">
+    <button class="btn" id="btnStartEnroll">Start Enrollment</button>
+    <button class="btn" id="btnStopEnroll">Stop Enrollment</button>
+  </div>
+
+  <p id="statusText">...</p>
+  <p id="sessionText">Session: -</p>
+  <p id="progressText">0/15</p>
+
+  <div style="width: 300px; height: 10px; background: #ddd; border-radius: 8px; overflow:hidden; margin: 0 auto;">
+    <div id="progressBar" style="width:0%; height:100%; background:#4caf50;"></div>
+  </div>
+
+  <video id="camVideo" autoplay playsinline style="width:320px; border-radius:10px; margin-top:16px;"></video>
+  <canvas id="camCanvas" style="display:none;"></canvas>
+
+  <button class="btn" style="margin-top:16px;" onclick="restart()">Back</button>
+</div>
+
+
     <!-- STEP 1: COMPANY -->
     <div class="card" id="step-company">
       <h2>Choose a Company</h2>
       <button class="btn" onclick="selectCompany('A')">Company A</button>
       <button class="btn" onclick="selectCompany('B')">Company B</button>
       <button class="btn" onclick="selectCompany('C')">Company C</button>
+      <button class="btn" onclick="showStep('step-enroll');startCamera();">Enroll</button>
     </div>
 
     <!-- STEP 2: IDENTIFICATION TYPE -->

@@ -9,27 +9,29 @@ from app.db.session import engine
 from app.db.models import Base
 from fastapi import APIRouter
 from app.api.routes_enrollment import router as enroll_router
+from app.api.routes_identify import router as identify_router
+
 
 app = FastAPI(title=settings.APP_NAME)
 
 #routers
 app.include_router(auth_router)
 app.include_router(enroll_router)
-
+app.include_router(identify_router)
 
 
 # If your UI runs on a different port/domain, enable CORS.
 # You can tighten this later (e.g., only your UI origin).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(auth_router)
-
 
 @app.get("/health")
 async def health():

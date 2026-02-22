@@ -18,7 +18,97 @@ class AuthenticationService:
 
         # thresholds
         self.fusion_thr = 0.75
-        self.identification_thr = 0.90  # 1:N match threshold
+        self.identification_thr = 0.35  # ✅ embedding cosine için tipik daha düşük olur (0.30-0.45 arası test edeceğiz)
+
+
+        def extract_face_embedding(self, face_img: np.ndarray) -> Optional[np.ndarray]:
+         """
+        Single image -> embedding.
+        Returns None if no face / extraction fails.
+        """
+        try:
+            vec = self.face.extract_embedding(face_img)
+            if vec is None:
+                return None
+            vec = np.asarray(vec, dtype=np.float32).reshape(-1)
+            if vec.size == 0:
+                return None
+            return vec
+        except Exception:
+            return None
+
+    async def enroll_user_with_template(
+        self,
+        session: AsyncSession,
+        username: str,
+        role: str,
+        face_template: np.ndarray,
+        n_samples: int,
+    ) -> dict:
+        """
+        Save/update user's face template embedding to DB.
+        Uses same storage format as enroll_user: float32 -> bytes in enc_feature_blob.
+        """
+        # user var mı?
+        result = await session.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(username=username, role=role)
+            session.add(user)
+            await session.flush()
+
+        # template normalize + bytes
+        vec = np.asarray(face_template, dtype=np.float32).reshape(-1)
+        vec = vec / (np.linalg.norm(vec) + 1e-9)
+        blob = vec.tobytes()
+
+        # mevcut face var mı?
+        result2 = await session.execute(
+            select(BiometricData).where(
+                BiometricData.user_id == user.user_id,
+                BiometricData.type == "face_feature",
+            )
+        )
+        existing = result2.scalar_one_or_none()
+
+        if existing:
+            old_vec = np.frombuffer(existing.enc_feature_blob, dtype=np.float32)
+            sim = self._cosine(vec, old_vec)
+
+            # aynı kişi tekrar kayıt denemesi (çok yüksek benzerlik)
+            if sim >= 0.95:
+                await session.commit()
+                return {
+                    "status": "FACE_ALREADY_REGISTERED",
+                    "similarity": float(sim),
+                    "n_samples": int(n_samples),
+                }
+
+            # farklıysa güncelle
+            existing.enc_feature_blob = blob
+            await session.commit()
+            return {
+                "status": "FACE_UPDATED",
+                "similarity": float(sim),
+                "n_samples": int(n_samples),
+            }
+
+        session.add(
+            BiometricData(
+                type="face_feature",
+                enc_feature_blob=blob,
+                user_id=user.user_id,
+            )
+        )
+        await session.commit()
+
+        return {
+            "status": "ENROLLED",
+            "user_id": user.user_id,
+            "n_samples": int(n_samples),
+        }
+
 
     # =====================================================
     # ================= ENROLLMENT ========================
@@ -26,8 +116,13 @@ class AuthenticationService:
 
     @staticmethod
     def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-        a = a.astype(np.float32)
-        b = b.astype(np.float32)
+        a = a.astype(np.float32).reshape(-1)
+        b = b.astype(np.float32).reshape(-1)
+
+        # Boyut uyuşmuyorsa eşleşmez say
+        if a.size != b.size:
+            return 0.0
+
         return float(np.dot(a, b) / ((np.linalg.norm(a) + 1e-8) * (np.linalg.norm(b) + 1e-8)))
 
     async def enroll_user(
@@ -49,12 +144,8 @@ class AuthenticationService:
             session.add(user)
             await session.flush()
 
-        feats = self.face.extract_features(face_img)
-
-        vec = np.array(
-            [feats.nose_x_norm, feats.left_eye_open_norm, feats.right_eye_open_norm],
-            dtype=np.float32,
-        )
+        # ✅ gerçek yüz embedding çıkar (FaceProcessor içinde extract_embedding olacak)
+        vec = self.face.extract_embedding(face_img).astype(np.float32).reshape(-1)
         blob = vec.tobytes()
 
         # mevcut face var mı?
@@ -70,6 +161,7 @@ class AuthenticationService:
             old_vec = np.frombuffer(existing.enc_feature_blob, dtype=np.float32)
             sim = self._cosine(vec, old_vec)
 
+            # aynı kişi tekrar kayıt denemesi
             if sim >= 0.95:
                 await session.commit()
                 return {
@@ -77,6 +169,7 @@ class AuthenticationService:
                     "similarity": sim,
                 }
 
+            # farklıysa güncelle
             existing.enc_feature_blob = blob
             await session.commit()
             return {
@@ -109,12 +202,8 @@ class AuthenticationService:
         face_img: np.ndarray,
     ) -> dict:
 
-        feats = self.face.extract_features(face_img)
-
-        query_vec = np.array(
-            [feats.nose_x_norm, feats.left_eye_open_norm, feats.right_eye_open_norm],
-            dtype=np.float32,
-        )
+        # ✅ embedding ile query vektörü
+        query_vec = self.face.extract_embedding(face_img).astype(np.float32).reshape(-1)
 
         result = await session.execute(
             select(User, BiometricData)
@@ -145,6 +234,14 @@ class AuthenticationService:
             "identified": False,
             "similarity": best_score,
         }
+
+    # Backward-compatible alias
+    async def identify_user(
+        self,
+        session: AsyncSession,
+        face_img: np.ndarray,
+    ) -> dict:
+        return await self.identify_face(session=session, face_img=face_img)
 
     # =====================================================
     # ================= VERIFY (FUSION) ===================
