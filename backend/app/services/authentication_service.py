@@ -20,6 +20,8 @@ class AuthenticationService:
         self.fusion_thr = 0.75
         self.identification_thr = 0.35  # ✅ embedding cosine için tipik daha düşük olur (0.30-0.45 arası test edeceğiz)
 
+        def extract_face_embedding(self, bgr_img):
+            return self.face.extract_embedding(bgr_img)
 
         def extract_face_embedding(self, face_img: np.ndarray) -> Optional[np.ndarray]:
          """

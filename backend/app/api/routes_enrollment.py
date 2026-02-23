@@ -125,7 +125,7 @@ async def push_frame(req: EnrollFrameRequest):
         )
 
     # 1) embedding çıkar
-    emb = _auth_service.extract_face_embedding(img)  # np.ndarray | None
+    emb = _auth_service.face.extract_embedding(img)
     if emb is None:
         return EnrollFrameResponse(
             accepted=False,
