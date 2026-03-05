@@ -48,5 +48,11 @@ async def verify(req: VerifyRequest, session: AsyncSession = Depends(get_session
         audio=audio,
         sr=sr,
     )
+     # ✅ Pydantic ValidationError fix: reason her zaman gelsin
+    if "reason" not in result or result["reason"] is None:
+        # decision varsa ona göre default üret
+        decision = result.get("decision", "UNKNOWN")
+        result["reason"] = "OK" if decision == "ACCEPTED" else "DENIED"
+
 
     return VerifyResponse(**result)

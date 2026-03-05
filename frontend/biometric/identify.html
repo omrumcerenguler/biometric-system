@@ -2,69 +2,72 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Verify | Biometric Module</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Identify | Biometric Module</title>
   <link rel="stylesheet" href="../assets/css/style.css" />
-  <script src="../assets/js/biometric.js"></script>
-
 </head>
-<body>
 
+<body data-page="identify">
   <div class="app-container">
 
-    <!-- STEP 1: IDENTIFICATION TYPE (İLK AÇILAN EKRAN) -->
-    <div class="card" id="step-method">
-      <h2>Choose Verification Method</h2>
-
-      <button class="btn" onclick="selectMethod('face')">Face Recognition</button>
-      <button class="btn" onclick="selectMethod('voice')">Voice Recognition</button>
-
-      <button class="btn" type="button" onclick="goBack()">Back</button>
-    </div>
-
-    <!-- STEP 2: FACE CAPTURE -->
-    <div class="card hidden" id="step-face">
-      <h2>Visual Identification</h2>
-      <p>Please look at the camera</p>
+    <!-- STEP 1: FACE -->
+    <div class="card" id="step-face">
+      <h2>Face</h2>
+      <p>Please look at the camera.</p>
 
       <video id="video" autoplay playsinline></video>
       <canvas id="canvas" class="hidden"></canvas>
 
-      <button class="btn" onclick="captureFace()">Capture</button>
-      <button class="btn" style="margin-top:16px;" onclick="restartVerify()">Back</button>
+      <button class="btn" id="btnCamStart" type="button">Start Camera</button>
+      <button class="btn" id="btnFaceCapture" type="button">Capture Face</button>
+      <button class="btn" id="btnBack" type="button">Back</button>
+
+      <p id="faceStatus" class="muted" style="margin-top:10px;"></p>
     </div>
 
-    <!-- STEP 2B: VOICE -->
+    <!-- STEP 2: VOICE -->
     <div class="card hidden" id="step-voice">
-      <h2>Voice Identification</h2>
-      <p>Please speak for 3-5 seconds</p>
+      <h2>Voice</h2>
+      <p>Please speak for 3–5 seconds.</p>
 
       <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-        <button class="btn" id="btn-voice-start" onclick="startVoiceRecord()">Start</button>
-        <button class="btn" id="btn-voice-stop" onclick="stopVoiceRecord()" disabled>Stop</button>
-        <button class="btn" id="btn-voice-send" onclick="sendVoice()" disabled>Send</button>
+        <button class="btn" id="btnVoiceStart" type="button">Start</button>
+        <button class="btn" id="btnVoiceStop" type="button" disabled>Stop</button>
       </div>
 
-      <audio id="audio-preview" class="hidden" controls style="margin-top:16px; width:100%;"></audio>
-
-      <button class="btn" style="margin-top:16px;" onclick="restartVerify()">Restart</button>
+      <audio id="audioPreview" class="hidden" controls style="margin-top:16px; width:100%;"></audio>
+      <p id="voiceStatus" class="muted" style="margin-top:10px;"></p>
     </div>
 
-    <!-- STEP 3: RESULT -->
+    <!-- STEP 3: VERIFY -->
+    <div class="card hidden" id="step-verify">
+      <h2>Verify</h2>
+      <p>Send face + voice to backend.</p>
+
+      <button class="btn" id="btnVerify" type="button" disabled>Verify</button>
+      <button class="btn" id="btnRestart" type="button" style="margin-top:12px;">Restart</button>
+
+      <p id="statusText" class="muted" style="margin-top:10px;"></p>
+    </div>
+
+    <!-- STEP 4: RESULT -->
     <div class="card hidden" id="step-result">
-      <h2>Authentication Result</h2>
+      <h2>Result</h2>
 
       <p id="result-decision"></p>
 
       <div class="score-box">
-        <p>Face Score: <span id="face-score"></span></p>
-        <p>Voice Score: <span id="voice-score"></span></p>
-        <p>Fusion Score: <span id="fusion-score"></span></p>
+        <p>Face Score: <span id="face-score">-</span></p>
+        <p>Voice Score: <span id="voice-score">-</span></p>
+        <p>Fusion Score: <span id="fusion-score">-</span></p>
       </div>
 
-      <button class="btn" onclick="restartVerify()">Restart</button>
+      <button class="btn" id="btnRestart2" type="button">Restart</button>
     </div>
 
   </div>
 
+  <!-- ✅ TEK GİRİŞ -->
+  <script type="module" src="../assets/js/index.js"></script>
 </body>
 </html>

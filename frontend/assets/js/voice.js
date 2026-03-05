@@ -1,0 +1,140 @@
+let audioContext = null;
+let mediaStream = null;
+let sourceNode = null;
+let processorNode = null;
+
+let chunks = [];
+let sampleRate = 16000; // hedef
+
+function downsampleBuffer(buffer, inRate, outRate) {
+  if (outRate === inRate) return buffer;
+  const ratio = inRate / outRate;
+  const newLen = Math.round(buffer.length / ratio);
+  const result = new Float32Array(newLen);
+
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let sum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      sum += buffer[i];
+      count++;
+    }
+    result[offsetResult] = sum / count;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
+function floatTo16BitPCM(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+function encodeWav(int16, sr) {
+  const buffer = new ArrayBuffer(44 + int16.length * 2);
+  const view = new DataView(buffer);
+
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  }
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + int16.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);      // PCM
+  view.setUint16(20, 1, true);       // format
+  view.setUint16(22, 1, true);       // mono
+  view.setUint32(24, sr, true);
+  view.setUint32(28, sr * 2, true);  // byte rate
+  view.setUint16(32, 2, true);       // block align
+  view.setUint16(34, 16, true);      // bits
+  writeString(36, "data");
+  view.setUint32(40, int16.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < int16.length; i++, offset += 2) {
+    view.setInt16(offset, int16[i], true);
+  }
+
+  return new Blob([view], { type: "audio/wav" });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => {
+      const dataUrl = r.result; // data:audio/wav;base64,....
+      resolve(String(dataUrl).split(",")[1]);
+    };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+export async function startVoiceRecording() {
+  chunks = [];
+
+  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const inRate = audioContext.sampleRate;
+
+  sourceNode = audioContext.createMediaStreamSource(mediaStream);
+
+  // ScriptProcessor demo için OK (AudioWorklet daha iyi ama uzun)
+  processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+  processorNode.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0);
+    const down = downsampleBuffer(input, inRate, sampleRate);
+    chunks.push(down);
+  };
+
+  sourceNode.connect(processorNode);
+  processorNode.connect(audioContext.destination);
+}
+
+export async function stopVoiceRecording() {
+  if (processorNode) processorNode.disconnect();
+  if (sourceNode) sourceNode.disconnect();
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+  }
+
+  if (audioContext) {
+    await audioContext.close().catch(() => {});
+  }
+
+  processorNode = null;
+  sourceNode = null;
+  mediaStream = null;
+  audioContext = null;
+
+  // merge
+  const length = chunks.reduce((acc, c) => acc + c.length, 0);
+  const merged = new Float32Array(length);
+  let offset = 0;
+  for (const c of chunks) {
+    merged.set(c, offset);
+    offset += c.length;
+  }
+
+  const int16 = floatTo16BitPCM(merged);
+  const wavBlob = encodeWav(int16, sampleRate);
+
+  return wavBlob; // blob döndürüyoruz
+}
+
+export async function stopVoiceRecordingToBase64() {
+  const blob = await stopVoiceRecording();
+  const b64 = await blobToBase64(blob);
+  return { blob, b64 };
+}

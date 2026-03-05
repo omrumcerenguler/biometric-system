@@ -347,38 +347,59 @@ async function apiIdentifyFace(face_image_b64) {
 // -------------------------
 window.captureFace = async function () {
   try {
-    const b64 = captureFrameBase64();
-    if (!b64) {
-      setStatus("Frame alınamadı. Kamera açık mı?");
+    const usernameInput = document.getElementById("usernameInput");
+    const username = usernameInput?.value?.trim();
+
+    if (!username) {
+      setStatus("Username required.");
       return;
     }
 
-    setStatus("Capturing... Identifying face...");
+    const faceB64 = captureFrameBase64();
+    if (!faceB64) {
+      setStatus("Face frame alınamadı.");
+      return;
+    }
 
-    const result = await apiIdentifyFace(b64);
+    if (!recordedVoiceB64) {
+      setStatus("Voice recording required.");
+      return;
+    }
+
+    setStatus("Sending face + voice...");
+
+    const res = await fetch(`${API_BASE}/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: username,
+        face_image_b64: faceB64,
+        voice_wav_b64: recordedVoiceB64
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      setStatus(result.detail || "Verify error.");
+      return;
+    }
 
     const decisionEl = document.getElementById("result-decision");
     const faceScoreEl = document.getElementById("face-score");
     const voiceScoreEl = document.getElementById("voice-score");
     const fusionScoreEl = document.getElementById("fusion-score");
 
-    if (result.identified) {
-      if (decisionEl)
-        decisionEl.textContent = `✅ IDENTIFIED: ${result.username} (id=${result.user_id})`;
-    } else {
-      if (decisionEl) decisionEl.textContent = `❌ NOT IDENTIFIED`;
-    }
-
-    if (faceScoreEl)
-      faceScoreEl.textContent = (result.similarity ?? 0).toFixed(3);
-    if (voiceScoreEl) voiceScoreEl.textContent = "-";
-    if (fusionScoreEl) fusionScoreEl.textContent = "-";
+    if (decisionEl) decisionEl.textContent = result.decision;
+    if (faceScoreEl) faceScoreEl.textContent = result.face_score.toFixed(3);
+    if (voiceScoreEl) voiceScoreEl.textContent = result.voice_score.toFixed(3);
+    if (fusionScoreEl) fusionScoreEl.textContent = result.fusion_score.toFixed(3);
 
     showStep("step-result");
     setStatus("Done.");
-  } catch (e) {
-    console.error(e);
-    setStatus(`Capture/Identify error: ${e.message}`);
+  } catch (err) {
+    console.error(err);
+    setStatus("Verify failed.");
   }
 };
 
@@ -474,3 +495,52 @@ function restartVerify() {
   // tekrar method ekranına dön
   if (window.showStep) window.showStep("step-method");
 }
+
+
+// =========================
+// VOICE RECORDING (VERIFY)
+// =========================
+
+let voiceRecorder = null;
+let voiceChunks = [];
+let recordedVoiceB64 = null;
+
+window.startVoiceRecording = async function () {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    voiceRecorder = new MediaRecorder(stream);
+    voiceChunks = [];
+
+    voiceRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        voiceChunks.push(e.data);
+      }
+    };
+
+    voiceRecorder.onstop = async () => {
+      const blob = new Blob(voiceChunks, { type: "audio/webm" });
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result.split(",")[1];
+        recordedVoiceB64 = base64data;
+        setStatus("Voice recorded.");
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    voiceRecorder.start();
+    setStatus("Recording voice...");
+  } catch (err) {
+    console.error(err);
+    setStatus("Microphone error.");
+  }
+};
+
+window.stopVoiceRecording = function () {
+  if (voiceRecorder && voiceRecorder.state !== "inactive") {
+    voiceRecorder.stop();
+    setStatus("Voice stopped.");
+  }
+};
