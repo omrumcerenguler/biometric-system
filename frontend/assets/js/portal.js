@@ -4,11 +4,12 @@ window.portal = {
   init() {
     console.log("[PORTAL] init");
 
-    const btn = document.getElementById("btn-biometric-login");
+    const biometricBtn = document.getElementById("btn-biometric-login");
 
-    if (btn) {
-      btn.addEventListener("click", () => {
-        window.location.href = "/biometric/identify.html";
+    if (biometricBtn) {
+      biometricBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.location.href = "../biometric/identify.html";
       });
     }
   },

@@ -7,68 +7,101 @@
     <link rel="stylesheet" href="../assets/css/style.css" />
   </head>
 
-  <body>
-    <div class="app-container">
-      <div class="card">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <h2 style="margin:0;">Enrollment (Admin)</h2>
-          <a href="/portal/login_portal.html" style="text-decoration:none;">← Back to Portal</a>
+  <body data-page="enroll">
+    <div class="app-container enroll-layout">
+      <div class="card enroll-hero">
+        <div class="section-head">
+          <h2>Enrollment (Admin)</h2>
+          <a class="back-link" href="/portal/login_portal.html">Back to Portal</a>
         </div>
 
-        <p style="margin-top:10px; opacity:.75;">
+        <p class="section-copy">
           This page is intended for enrollment only (hidden/admin). Access via URL.
         </p>
       </div>
 
       <!-- USER INFO -->
-      <div class="card">
+      <div class="card enroll-sidebar">
         <h2>User Info</h2>
 
-        <div style="display:flex; gap:12px; flex-wrap:wrap;">
-          <div style="flex:1; min-width:220px;">
-            <label style="display:block; margin-bottom:6px;">Username</label>
-            <input id="username" placeholder="e.g. gulin.kale" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" />
+        <div class="field-grid">
+          <div class="field-group">
+            <label class="field-label">Username</label>
+            <input
+              class="text-input"
+              id="username"
+              placeholder="e.g. gulin.kale"
+            />
           </div>
 
-          <div style="flex:1; min-width:220px;">
-            <label style="display:block; margin-bottom:6px;">Role</label>
-            <input id="role" placeholder="e.g. student" style="width:100%; padding:10px; border-radius:10px; border:1px solid #ddd;" />
+          <div class="field-group">
+            <label class="field-label">Role</label>
+            <input
+              class="text-input"
+              id="role"
+              placeholder="e.g. student"
+            />
           </div>
         </div>
 
-        <p id="sessionText" style="margin-top:10px; opacity:.8;">Session: -</p>
+        <p id="sessionText" class="session-text">Session: -</p>
       </div>
 
-      <!-- CAMERA -->
-      <div class="card">
+      <!-- FACE ENROLL -->
+      <div class="card enroll-main-card">
         <h2>Face Capture</h2>
-        <p style="opacity:.75;">Start camera, then start enrollment. Samples will be collected automatically.</p>
+        <p class="section-copy">
+          Start camera, then start enrollment. Samples will be collected automatically.
+        </p>
 
-        <video id="camVideo" autoplay playsinline style="width:100%; border-radius:16px; background:#111; min-height:220px;"></video>
+        <video
+          id="camVideo"
+          autoplay
+          playsinline
+          class="camera-frame"
+        ></video>
         <canvas id="camCanvas" class="hidden"></canvas>
 
-        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
+        <div class="button-row compact-actions">
           <button class="btn" id="btnStartCam" type="button">Start Camera</button>
           <button class="btn" id="btnStopCam" type="button">Stop Camera</button>
         </div>
 
-        <div style="margin-top:14px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-            <span style="opacity:.8;">Progress:</span>
-            <span id="progressText" style="font-weight:600;">0/15</span>
+        <div class="progress-shell">
+          <div class="progress-head">
+            <span class="progress-label">Progress:</span>
+            <span id="progressText" class="progress-value">0/15</span>
           </div>
 
-          <div style="width:100%; height:10px; background:#eee; border-radius:999px; overflow:hidden; margin-top:8px;">
-            <div id="progressBar" style="height:100%; width:0%; background:#111;"></div>
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar"></div>
           </div>
         </div>
 
-        <p id="statusText" style="margin-top:12px; opacity:.85;">Ready.</p>
+        <p id="statusText" class="status-line">Ready.</p>
 
-        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
+        <div class="button-row compact-actions">
           <button class="btn" id="btnStartEnroll" type="button">Start Enrollment</button>
           <button class="btn" id="btnStopEnroll" type="button">Stop</button>
         </div>
+      </div>
+
+      <!-- VOICE ENROLL -->
+      <div class="card enroll-main-card">
+        <h2>Voice Enrollment</h2>
+        <p class="section-copy">
+          After face enrollment, record a 3–5 second voice sample and save it as the user's voice template.
+        </p>
+
+        <div class="button-row compact-actions">
+          <button class="btn" id="btnVoiceStart" type="button">Start Recording</button>
+          <button class="btn" id="btnVoiceStop" type="button">Stop Recording</button>
+          <button class="btn" id="btnVoiceEnroll" type="button">Enroll Voice</button>
+        </div>
+
+        <audio id="audioPreview" class="hidden audio-preview" controls></audio>
+
+        <p id="voiceStatus" class="status-line">Ready.</p>
       </div>
     </div>
 

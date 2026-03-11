@@ -20,7 +20,12 @@
 
       <button class="btn" id="btnCamStart" type="button">Start Camera</button>
       <button class="btn" id="btnFaceCapture" type="button">Capture Face</button>
-      <button class="btn" id="btnBack" type="button">Back</button>
+      <a
+        class="btn"
+        id="btnBack"
+        href="../portal/login_portal.html"
+        style="display:inline-block; text-decoration:none; text-align:center;"
+      >Back</a>
 
       <p id="faceStatus" class="muted" style="margin-top:10px;"></p>
     </div>
@@ -35,7 +40,13 @@
         <button class="btn" id="btnVoiceStop" type="button" disabled>Stop</button>
       </div>
 
-      <audio id="audioPreview" class="hidden" controls style="margin-top:16px; width:100%;"></audio>
+      <audio
+        id="audioPreview"
+        class="hidden"
+        controls
+        style="margin-top:16px; width:100%;"
+      ></audio>
+
       <p id="voiceStatus" class="muted" style="margin-top:10px;"></p>
     </div>
 
@@ -62,12 +73,11 @@
         <p>Fusion Score: <span id="fusion-score">-</span></p>
       </div>
 
-      <button class="btn" id="btnRestart2" type="button">Restart</button>
+      <button class="btn" id="btnRestartResult" type="button">Restart</button>
     </div>
 
   </div>
 
-  <!-- ✅ TEK GİRİŞ -->
   <script type="module" src="../assets/js/index.js"></script>
 </body>
 </html>

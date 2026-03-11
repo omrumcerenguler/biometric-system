@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Office 365 Sign In</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="../assets/css/portal.css" />
+</head>
+
+<body class="portal-bg office-login-page">
+  <main class="office-single-card">
+    <div class="office-single-header">
+      <div class="office-single-brand">
+        <div class="office-single-mark">U</div>
+        <div>
+          <h1 class="office-single-title">Sign in</h1>
+          <p class="office-single-subtitle">Use your university account</p>
+        </div>
+      </div>
+    </div>
+
+    <form id="portalLoginForm" class="office-single-form">
+      <div class="office-single-field">
+        <label class="office-single-label" for="username">University Email / Username</label>
+        <input
+          type="text"
+          id="username"
+          class="office-single-input"
+          placeholder="Enter your university email or username"
+          required
+        />
+      </div>
+
+      <div class="office-single-field">
+        <label class="office-single-label" for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          class="office-single-input"
+          placeholder="Enter your password"
+          required
+        />
+      </div>
+
+      <p id="loginMessage" class="office-single-message"></p>
+
+      <div class="office-single-actions">
+        <a href="./login_portal.html" class="office-secondary-btn">Back</a>
+        <button type="submit" class="office-primary-btn">Sign In</button>
+      </div>
+    </form>
+
+    <div class="office-single-footer">
+      <p>
+        Sign in with your registered university credentials. Only users in the system
+        can continue to biometric enrollment.
+      </p>
+    </div>
+  </main>
+
+  <script defer src="../assets/js/portal.js"></script>
+</body>
+
+</html>

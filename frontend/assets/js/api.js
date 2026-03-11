@@ -12,11 +12,9 @@ async function jsonFetch(path, options = {}) {
   try {
     res = await fetch(url, options);
   } catch (e) {
-    // ağ hatası / backend kapalı
     throw new Error("NETWORK_ERROR");
   }
 
-  // bazen json değil html dönebiliyor -> güvenli parse
   const text = await res.text();
   let data = {};
   try {
@@ -26,7 +24,6 @@ async function jsonFetch(path, options = {}) {
   }
 
   if (!res.ok) {
-    // FastAPI genelde {detail:"..."} döner
     const msg = data?.detail || data?.message || `HTTP_${res.status}`;
     throw new Error(msg);
   }
@@ -35,7 +32,7 @@ async function jsonFetch(path, options = {}) {
 }
 
 // -------------------------
-// ENROLL
+// ENROLL (FACE - session based)
 // -------------------------
 export function apiStartEnroll(username, role) {
   return jsonFetch("/enroll/start", {
@@ -62,10 +59,22 @@ export function apiFinishEnroll(session_id) {
 }
 
 // -------------------------
-// IDENTIFY (1:N)
+// ENROLL (VOICE - identity template)
+// -------------------------
+export function apiEnrollVoice(username, role, voice_wav_b64) {
+  return jsonFetch("/enroll/voice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, role, voice_wav_b64 }),
+  });
+}
+
+// -------------------------
+// IDENTIFY (1:N) - Face
 // -------------------------
 export function apiIdentifyFace(face_image_b64) {
-  return jsonFetch("/identify", {
+  // 307 redirect yememek için /identify/ daha stabil
+  return jsonFetch("/identify/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ face_image_b64 }),
@@ -73,12 +82,12 @@ export function apiIdentifyFace(face_image_b64) {
 }
 
 // -------------------------
-// AUTH VERIFY (username + face + voice)
+// AUTH VERIFY (Face + Voice)  (username YOK)
 // -------------------------
-export function apiAuthVerify({ username, face_image_b64, voice_wav_b64 }) {
+export function apiAuthVerify({ face_image_b64, voice_wav_b64 }) {
   return jsonFetch("/auth/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, face_image_b64, voice_wav_b64 }),
+    body: JSON.stringify({ face_image_b64, voice_wav_b64 }),
   });
 }

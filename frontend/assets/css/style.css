@@ -4,15 +4,16 @@
 }
 
 body {
+  margin: 0;
   background: #f2f2f2;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .app-container {
-  width: 420px;
+  width: min(420px, calc(100vw - 32px));
 }
 
 .wizard {
@@ -39,13 +40,17 @@ body {
   border-radius: 30px;
   border: 2px solid #000;
   background: white;
+  color: #000;
   font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .btn:hover {
   background: #000;
   color: white;
+  transform: translateY(-1px);
 }
 
 video {
@@ -95,3 +100,196 @@ video {
   animation: stepFadeInUp 0.25s ease-out;
 }
 
+body[data-page="enroll"] {
+  display: block;
+  padding: 32px 20px;
+}
+
+body[data-page="enroll"] .app-container {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.enroll-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.enroll-hero {
+  grid-column: 1 / -1;
+  text-align: left;
+}
+
+.enroll-sidebar {
+  text-align: left;
+  position: sticky;
+  top: 32px;
+}
+
+.enroll-main-card {
+  text-align: left;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.section-head h2,
+.enroll-hero h2 {
+  margin: 0;
+}
+
+.section-copy {
+  margin: 10px 0 0;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+
+.back-link {
+  color: #000;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.field-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.field-group {
+  min-width: 0;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.text-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #cfd3da;
+  background: #fff;
+  font-size: 15px;
+}
+
+.text-input:focus {
+  outline: 2px solid rgba(0, 0, 0, 0.08);
+  border-color: #000;
+}
+
+.session-text {
+  margin: 14px 0 0;
+  opacity: 0.8;
+}
+
+.camera-frame {
+  width: 100%;
+  min-height: 320px;
+  object-fit: cover;
+  border-radius: 18px;
+  background: #111;
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.compact-actions .btn {
+  flex: 1 1 180px;
+  width: auto;
+  margin: 0;
+}
+
+.progress-shell {
+  margin-top: 18px;
+}
+
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-label {
+  opacity: 0.8;
+}
+
+.progress-value {
+  font-weight: 700;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: #d5d5d5;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #111;
+  transition: width 0.2s ease;
+}
+
+.status-line {
+  margin: 14px 0 0;
+  opacity: 0.85;
+  min-height: 24px;
+}
+
+.audio-preview {
+  width: 100%;
+  margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .enroll-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .enroll-sidebar {
+    position: static;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  body[data-page="enroll"] {
+    padding: 20px 14px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .camera-frame {
+    min-height: 220px;
+  }
+
+  .compact-actions .btn {
+    flex-basis: 100%;
+  }
+}
