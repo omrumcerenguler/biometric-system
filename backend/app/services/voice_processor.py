@@ -9,13 +9,6 @@ import numpy as np
 
 @dataclass(frozen=True)
 class VoiceFeatures:
-    """
-    Compact audio features for liveness / anti-spoof heuristics.
-
-    Notes:
-    - All features are simple and fast to compute.
-    - Designed for downstream scoring (0..1) in LivenessDetector.
-    """
     rms: float
     zcr: float
     spec_flatness: float
@@ -23,38 +16,19 @@ class VoiceFeatures:
 
 
 class VoiceProcessor:
-    """
-    Voice feature extractor.
-
-    Pro-level decisions:
-    - Expects mono waveform as float32/float64 numpy array.
-    - Performs basic validation and safe normalization.
-    - Keeps parameters (n_mfcc) configurable and explicit.
-    """
-
     DEFAULT_N_MFCC: Final[int] = 13
+    TARGET_SR: Final[int] = 16000
     EPS: Final[float] = 1e-12
 
     def __init__(self, n_mfcc: int = DEFAULT_N_MFCC) -> None:
         self._n_mfcc = int(n_mfcc)
 
-    def extract_features(self, audio: np.ndarray, sr: int) -> VoiceFeatures:
-        """
-        Extract audio features from a mono waveform.
-
-        Args:
-            audio: 1-D numpy array (mono). Prefer float32 in [-1, 1].
-            sr: sampling rate (e.g., 16000)
-
-        Returns:
-            VoiceFeatures
-
-        Raises:
-            ValueError: if input audio/sr is invalid or too short.
-        """
+    # -------------------------
+    # Shared preprocessing
+    # -------------------------
+    def _validate_and_preprocess(self, audio: np.ndarray, sr: int, min_seconds: float) -> tuple[np.ndarray, int]:
         if audio is None or not isinstance(audio, np.ndarray) or audio.size == 0:
             raise ValueError("INVALID_AUDIO")
-
         if audio.ndim != 1:
             raise ValueError("AUDIO_NOT_MONO")
 
@@ -62,25 +36,33 @@ class VoiceProcessor:
         if sr <= 0:
             raise ValueError("INVALID_SAMPLE_RATE")
 
-        # Very short audio can break some spectral features; require a minimum duration (~0.2s)
-        min_samples = int(0.2 * sr)
-        if audio.size < min_samples:
-            raise ValueError("AUDIO_TOO_SHORT")
-
-        # Ensure finite values
         if not np.isfinite(audio).all():
             raise ValueError("AUDIO_NOT_FINITE")
 
-        # Convert to float32 for consistent librosa behavior
         audio = audio.astype(np.float32, copy=False)
 
-        # Safe normalization (avoid divide-by-zero)
+        # Resample to stable SR
+        if sr != self.TARGET_SR:
+            audio = librosa.resample(y=audio, orig_sr=sr, target_sr=self.TARGET_SR)
+            sr = self.TARGET_SR
+
+        min_samples = int(min_seconds * sr)
+        if audio.size < min_samples:
+            raise ValueError("AUDIO_TOO_SHORT")
+
+        # Peak normalize (safe)
         peak = float(np.max(np.abs(audio)))
         if peak > self.EPS:
             audio = audio / peak
 
-        # Feature extraction
-        # rms: energy; zcr: rough noisiness; flatness: tone vs noise; mfcc_mean: coarse timbre indicator
+        return audio, sr
+
+    # -------------------------
+    # Liveness-ish features (heuristics)
+    # -------------------------
+    def extract_features(self, audio: np.ndarray, sr: int) -> VoiceFeatures:
+        audio, sr = self._validate_and_preprocess(audio, sr, min_seconds=0.2)
+
         rms = float(np.mean(librosa.feature.rms(y=audio)))
         zcr = float(np.mean(librosa.feature.zero_crossing_rate(y=audio)))
         flat = float(np.mean(librosa.feature.spectral_flatness(y=audio)))
@@ -94,3 +76,31 @@ class VoiceProcessor:
             spec_flatness=flat,
             mfcc_mean=mfcc_mean,
         )
+
+    # -------------------------
+    # Identity embedding (voiceprint)
+    # -------------------------
+    def extract_embedding(self, audio: np.ndarray, sr: int) -> np.ndarray:
+        """
+        V1 Voiceprint embedding (MFCC + delta MFCC stats pooling).
+
+        Output:
+            1-D float32 vector with fixed size:
+            - mfcc mean (n_mfcc)
+            - mfcc std  (n_mfcc)
+            - delta mean (n_mfcc)
+            - delta std  (n_mfcc)
+            => total = 4 * n_mfcc
+        """
+        audio, sr = self._validate_and_preprocess(audio, sr, min_seconds=2.0)
+
+        mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=self._n_mfcc)  # (n_mfcc, T)
+        d_mfcc = librosa.feature.delta(mfcc)  # (n_mfcc, T)
+
+        mfcc_mean = np.mean(mfcc, axis=1)
+        mfcc_std = np.std(mfcc, axis=1)
+        d_mean = np.mean(d_mfcc, axis=1)
+        d_std = np.std(d_mfcc, axis=1)
+
+        emb = np.concatenate([mfcc_mean, mfcc_std, d_mean, d_std], axis=0).astype(np.float32)
+        return emb

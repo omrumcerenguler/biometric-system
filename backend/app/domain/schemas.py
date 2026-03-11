@@ -5,11 +5,10 @@ from pydantic import BaseModel, field_validator, model_validator
 
 
 class VerifyRequest(BaseModel):
-    username: str
     face_image_b64: Optional[str] = None
     voice_wav_b64: Optional[str] = None
 
-    # boş string -> None (kalıcı temizlik)
+    # boş string -> None
     @field_validator("face_image_b64", "voice_wav_b64", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
@@ -29,8 +28,8 @@ class VerifyRequest(BaseModel):
 
 class VerifyResponse(BaseModel):
     decision: str
+    reason: str
+    identified_user: Optional[str] = None
     fusion_score: float
     face_score: float
     voice_score: float
-    reason: str
-    identified_user: Optional[str] = None

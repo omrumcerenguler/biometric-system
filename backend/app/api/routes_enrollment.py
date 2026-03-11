@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from uuid import uuid4
@@ -9,16 +10,18 @@ from typing import Dict, List
 
 import numpy as np
 
+from app.db.models import User
 from app.db.session import get_session
 from app.services.authentication_service import AuthenticationService
 from app.utils.image_io import b64_to_bgr_image
+from app.utils.audio_io import b64_to_wav_mono
 
 router = APIRouter(prefix="/enroll", tags=["enroll"])
 _auth_service = AuthenticationService()
 
 
 # =====================================================
-# ================ LEGACY (single-shot) ===============
+# ================ LEGACY (DISABLED) ==================
 # =====================================================
 class EnrollRequest(BaseModel):
     username: str
@@ -29,24 +32,74 @@ class EnrollRequest(BaseModel):
 @router.post("/")
 async def enroll(req: EnrollRequest, session: AsyncSession = Depends(get_session)):
     """
-    Tek foto ile kayıt (eski endpoint - kalsın)
+    Legacy single-shot enroll endpoint is intentionally disabled.
+    Product flow uses session-based face enrollment + voice enrollment.
     """
-    try:
-        img = b64_to_bgr_image(req.face_image_b64)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"INVALID_IMAGE: {e}")
-
-    result = await _auth_service.enroll_user(
-        session=session,
-        username=req.username,
-        role=req.role,
-        face_img=img,
+    raise HTTPException(
+        status_code=410,
+        detail="LEGACY_ENROLL_DISABLED_USE_SESSION_BASED_FLOW",
     )
+
+
+# =====================================================
+# ===================== HELPERS =======================
+# =====================================================
+async def _require_existing_user(session: AsyncSession, username: str) -> User:
+    result = await session.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
+    return user
+
+
+# =====================================================
+# ================== VOICE ENROLL =====================
+# =====================================================
+class EnrollVoiceRequest(BaseModel):
+    username: str
+    role: str
+    voice_wav_b64: str
+
+
+@router.post("/voice")
+async def enroll_voice(req: EnrollVoiceRequest, session: AsyncSession = Depends(get_session)):
+    """
+    Save/update voice template for an EXISTING user only.
+    """
+    username = (req.username or "").strip()
+    role = (req.role or "").strip()
+
+    if not username:
+        raise HTTPException(status_code=400, detail="USERNAME_EMPTY")
+    if not role:
+        raise HTTPException(status_code=400, detail="ROLE_EMPTY")
+    if not req.voice_wav_b64 or not req.voice_wav_b64.strip():
+        raise HTTPException(status_code=400, detail="VOICE_EMPTY")
+
+    # mevcut kullanıcı zorunlu
+    await _require_existing_user(session, username)
+
+    try:
+        audio, sr = b64_to_wav_mono(req.voice_wav_b64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"INVALID_VOICE_AUDIO: {e}")
+
+    result = await _auth_service.enroll_voice(
+        session=session,
+        username=username,
+        role=role,
+        audio=audio,
+        sr=sr,
+    )
+
+    if result.get("reason") == "USER_NOT_FOUND":
+        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
+
     return result
 
 
 # =====================================================
-# ============ SESSION-BASED ENROLLMENT ===============
+# ============ SESSION-BASED FACE ENROLL =============
 # =====================================================
 TARGET_SAMPLES = 15
 SESSION_TTL_SECONDS = 120  # 2 minutes
@@ -76,14 +129,17 @@ class EnrollStartResponse(BaseModel):
 
 
 @router.post("/start", response_model=EnrollStartResponse)
-async def start(req: EnrollStartRequest):
-    username = req.username.strip()
-    role = req.role.strip()
+async def start(req: EnrollStartRequest, session: AsyncSession = Depends(get_session)):
+    username = (req.username or "").strip()
+    role = (req.role or "").strip()
 
     if not username:
         raise HTTPException(status_code=400, detail="USERNAME_EMPTY")
     if not role:
         raise HTTPException(status_code=400, detail="ROLE_EMPTY")
+
+    # mevcut kullanıcı zorunlu
+    await _require_existing_user(session, username)
 
     sid = str(uuid4())
     ENROLL_SESSIONS[sid] = {
@@ -124,8 +180,8 @@ async def push_frame(req: EnrollFrameRequest):
             target=s["target"],
         )
 
-    # 1) embedding çıkar
-    emb = _auth_service.face.extract_embedding(img)
+    # embedding çıkar + normalize (service üzerinden)
+    emb = _auth_service.extract_face_embedding(img)
     if emb is None:
         return EnrollFrameResponse(
             accepted=False,
@@ -134,11 +190,6 @@ async def push_frame(req: EnrollFrameRequest):
             target=s["target"],
         )
 
-    # 2) normalize (cosine stabil)
-    emb = emb.astype(np.float32)
-    emb = emb / (np.linalg.norm(emb) + 1e-9)
-
-    # 3) session'a ekle
     s["embeddings"].append(emb)
     s["accepted"] += 1
 
@@ -179,4 +230,8 @@ async def finish(req: EnrollFinishRequest, session: AsyncSession = Depends(get_s
     )
 
     ENROLL_SESSIONS.pop(req.session_id, None)
+
+    if result.get("reason") == "USER_NOT_FOUND":
+        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
+
     return result
