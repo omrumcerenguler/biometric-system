@@ -170,32 +170,29 @@ export function initEnroll() {
     if (doFinish && sessionId) {
       try {
         const result = await apiFinishEnroll(sessionId);
-        console.log("[FACE FINISH STATUS]", result?.status);
-
         const nSamples = result?.n_samples ?? acceptedSamples;
         setStatus(`Saved: ${result?.status || "OK"} (samples: ${nSamples})`);
 
         const status = (result?.status || "").toUpperCase();
+        console.log("[FACE FINISH STATUS]", status);
+        console.log("[FACE FINISH NSAMPLES]", nSamples);
 
+        // sample geldiyse veya backend olumlu bir status döndüyse tamam kabul et
         if (
+          nSamples > 0 ||
           status === "ENROLLED" ||
           status === "FACE_UPDATED" ||
           status === "FACE_ALREADY_REGISTERED"
         ) {
           faceEnrollmentCompleted = true;
-          console.log("[DEBUG] faceEnrollmentCompleted set to true");
-          console.log("[DEBUG] btnGoVoice element:", btnGoVoice);
-          console.log("[DEBUG] btnGoVoice.disabled before update:", btnGoVoice?.disabled);
-          
           updateStepButtons();
+          console.log("[FACE COMPLETED]", faceEnrollmentCompleted);
+          setStatus(`Face enrollment complete. Switching to voice step...`);
           
-          console.log("[DEBUG] btnGoVoice.disabled after update:", btnGoVoice?.disabled);
-          setStatus(`Face enrollment complete. Click 'Continue to Voice' to proceed.`);
-          
-          // Otomatik voice adımına geç
           setTimeout(() => {
+            console.log("[DEBUG] Calling showVoiceStep()");
             showVoiceStep();
-          }, 500);
+          }, 300);
         }
       } catch (e) {
         console.error(e);
@@ -370,10 +367,14 @@ export function initEnroll() {
   });
 
   btnGoVoice?.addEventListener("click", () => {
+    console.log("[GO VOICE CLICKED]");
+    console.log("[FACE COMPLETED STATE]", faceEnrollmentCompleted);
+
     if (!faceEnrollmentCompleted) {
       setStatus("Complete face enrollment first.");
       return;
     }
+
     showVoiceStep();
   });
 
