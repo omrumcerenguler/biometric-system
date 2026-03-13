@@ -18,9 +18,11 @@ opencv-python==4.10.0.84
 mediapipe==0.10.14
 
 # Audio processing
-librosa==0.10.2.post1
+librosa==0.9.2
 soundfile==0.12.1
 numpy==1.26.4
+resemblyzer==0.1.1.dev0
+setuptools<81
 
 # Testing
 pytest==8.3.2

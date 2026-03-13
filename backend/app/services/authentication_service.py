@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.models import User, BiometricData
+from app.services.eye_state_detector import EyeStateDetector
 from app.services.face_processor import FaceProcessor
 from app.services.voice_processor import VoiceProcessor, VoiceFeatures
 
@@ -16,12 +18,13 @@ from app.services.voice_processor import VoiceProcessor, VoiceFeatures
 class AuthenticationService:
     def __init__(self) -> None:
         self.face = FaceProcessor()
+        self.eye_state = EyeStateDetector()
         self.voice = VoiceProcessor()
 
-        # thresholds
-        self.fusion_thr = 0.75
-        self.identification_thr = 0.35
-        self.voice_ident_thr = 0.55
+        # thresholds from config
+        self.fusion_thr = settings.FUSION_PASS_THRESHOLD
+        self.identification_thr = settings.FACE_IDENTIFICATION_THRESHOLD
+        self.voice_ident_thr = settings.VOICE_IDENTIFICATION_THRESHOLD
 
     # =====================================================
     # Utils
@@ -30,17 +33,21 @@ class AuthenticationService:
     @staticmethod
     def _l2norm(vec: np.ndarray) -> np.ndarray:
         vec = np.asarray(vec, dtype=np.float32).reshape(-1)
-        return vec / (np.linalg.norm(vec) + 1e-9)
+        norm = np.linalg.norm(vec)
+        if norm <= 1e-9:
+            return vec
+        return vec / norm
 
     @staticmethod
     def _cosine(a: np.ndarray, b: np.ndarray) -> float:
         a = np.asarray(a, dtype=np.float32).reshape(-1)
         b = np.asarray(b, dtype=np.float32).reshape(-1)
+
         if a.size != b.size or a.size == 0:
             return 0.0
-        return float(
-            np.dot(a, b) / ((np.linalg.norm(a) + 1e-8) * (np.linalg.norm(b) + 1e-8))
-        )
+
+        denom = (np.linalg.norm(a) + 1e-8) * (np.linalg.norm(b) + 1e-8)
+        return float(np.dot(a, b) / denom)
 
     # =====================================================
     # Portal Login
@@ -89,23 +96,42 @@ class AuthenticationService:
             vec = self.face.extract_embedding(face_img)
             if vec is None:
                 return None
+
             vec = np.asarray(vec, dtype=np.float32).reshape(-1)
             if vec.size == 0:
                 return None
+
             return self._l2norm(vec)
         except Exception:
             return None
 
-    # ---------------- Voice embedding (IDENTITY) ----------------
+    def extract_face_embedding_and_pose(self, face_img: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[float]]:
+        try:
+            vec, nose_x_ratio = self.face.extract_embedding_and_pose(face_img)
+            if vec is None:
+                return None, None
+
+            vec = np.asarray(vec, dtype=np.float32).reshape(-1)
+            if vec.size == 0:
+                return None, None
+
+            return self._l2norm(vec), nose_x_ratio
+        except Exception:
+            return None, None
+
+    # ---------------- Voice embedding ----------------
 
     def extract_voice_embedding(self, audio: np.ndarray, sr: int) -> Optional[np.ndarray]:
         try:
             vec = self.voice.extract_embedding(audio, sr)
             vec = np.asarray(vec, dtype=np.float32).reshape(-1)
+
             if vec.size == 0:
                 return None
+
             return self._l2norm(vec)
-        except Exception:
+        except Exception as exc:
+            print(f"[VOICE_EMBEDDING_FAILED] {type(exc).__name__}: {exc}")
             return None
 
     # =====================================================
@@ -127,7 +153,7 @@ class AuthenticationService:
             return {"status": "FAILED", "reason": "USER_NOT_FOUND"}
 
         vec = self._l2norm(face_template)
-        blob = vec.tobytes()
+        blob = vec.astype(np.float32).tobytes()
 
         result2 = await session.execute(
             select(BiometricData).where(
@@ -139,6 +165,7 @@ class AuthenticationService:
 
         if existing:
             old_vec = np.frombuffer(existing.enc_feature_blob, dtype=np.float32)
+            old_vec = self._l2norm(old_vec)
             sim = self._cosine(vec, old_vec)
 
             if sim >= 0.95:
@@ -184,17 +211,34 @@ class AuthenticationService:
         audio: np.ndarray,
         sr: int,
     ) -> dict:
+        v = self.extract_voice_embedding(audio, sr)
+        if v is None:
+            return {"status": "FAILED", "reason": "VOICE_EMBEDDING_FAILED"}
+
+        return await self.save_voice_template_vector(
+            session=session,
+            username=username,
+            voice_vec=v,
+        )
+
+    async def save_voice_template_vector(
+        self,
+        session: AsyncSession,
+        username: str,
+        voice_vec: np.ndarray,
+        allow_low_similarity_update: bool = False,
+    ) -> dict:
         result = await session.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
 
         if user is None:
             return {"status": "FAILED", "reason": "USER_NOT_FOUND"}
 
-        v = self.extract_voice_embedding(audio, sr)
-        if v is None:
+        v = self._l2norm(np.asarray(voice_vec, dtype=np.float32).reshape(-1))
+        if v.size == 0:
             return {"status": "FAILED", "reason": "VOICE_EMBEDDING_FAILED"}
 
-        blob = v.tobytes()
+        blob = v.astype(np.float32).tobytes()
 
         result2 = await session.execute(
             select(BiometricData).where(
@@ -206,7 +250,17 @@ class AuthenticationService:
 
         if existing:
             old_v = np.frombuffer(existing.enc_feature_blob, dtype=np.float32)
+            old_v = self._l2norm(old_v)
             sim = self._cosine(v, old_v)
+
+            # Prevent hijacking an existing user's voice template with someone else.
+            if sim < self.voice_ident_thr and not allow_low_similarity_update:
+                return {
+                    "status": "FAILED",
+                    "reason": "VOICE_IDENTITY_MISMATCH",
+                    "similarity": float(sim),
+                    "user_id": user.user_id,
+                }
 
             if sim >= 0.95:
                 await session.commit()
@@ -250,21 +304,49 @@ class AuthenticationService:
             )
         )
         bio = result.scalar_one_or_none()
+
         if not bio or not bio.enc_feature_blob:
             return None
-        return np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+
+        vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+        if vec.size == 0:
+            return None
+
+        return self._l2norm(vec)
 
     # =====================================================
     # Identification (1:N) - FACE
     # =====================================================
 
     async def identify_face(self, session: AsyncSession, face_img: np.ndarray) -> dict:
-        query_vec = self.extract_face_embedding(face_img)
+        query_vec, nose_x_ratio = self.extract_face_embedding_and_pose(face_img)
         if query_vec is None:
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "NO_FACE_DETECTED",
+            }
+
+        # First capture must be frontal enough to reduce side-pose false positives.
+        if nose_x_ratio is None or nose_x_ratio < 0.44 or nose_x_ratio > 0.56:
+            return {
+                "identified": False,
+                "similarity": 0.0,
+                "reason": "FACE_NOT_FRONTAL",
+            }
+
+        eyes_open, _eye_state = self.eye_state.are_eyes_open(face_img)
+        if eyes_open is False:
+            return {
+                "identified": False,
+                "similarity": 0.0,
+                "reason": "EYES_CLOSED",
+            }
+        if eyes_open is None:
+            return {
+                "identified": False,
+                "similarity": 0.0,
+                "reason": "EYES_NOT_CLEAR",
             }
 
         result = await session.execute(
@@ -278,6 +360,8 @@ class AuthenticationService:
 
         for user, bio in result.all():
             db_vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+            db_vec = self._l2norm(db_vec)
+
             sim = self._cosine(query_vec, db_vec)
             if sim > best_score:
                 best_score = sim
@@ -294,7 +378,7 @@ class AuthenticationService:
 
         return {
             "identified": False,
-            "similarity": float(best_score),
+            "similarity": float(max(best_score, 0.0)),
             "reason": "NO_MATCH",
         }
 
