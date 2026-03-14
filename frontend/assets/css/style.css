@@ -59,6 +59,18 @@ video {
   margin: 15px 0;
 }
 
+video.camera-mirrored {
+  transform: scaleX(-1) !important;
+  -webkit-transform: scaleX(-1) !important;
+  transform-origin: center center;
+}
+
+video.camera-unmirrored {
+  transform: scaleX(1) !important;
+  -webkit-transform: scaleX(1) !important;
+  transform-origin: center center;
+}
+
 .hidden {
   display: none !important;
 }

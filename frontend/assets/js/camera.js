@@ -1,4 +1,8 @@
 let mediaStream = null;
+// Keep preview and captured frame orientation consistent.
+// false => non-mirrored (natural camera orientation)
+// true  => mirrored (selfie mirror view)
+const USE_MIRRORED_CAMERA = true;
 
 export async function startCamera(videoEl) {
   if (!videoEl) throw new Error("VIDEO_ELEMENT_MISSING");
@@ -6,6 +10,12 @@ export async function startCamera(videoEl) {
   // stream varsa tekrar bağla
   if (mediaStream) {
     videoEl.srcObject = mediaStream;
+    videoEl.dataset.cameraMirror = USE_MIRRORED_CAMERA ? "true" : "false";
+    videoEl.classList.toggle("camera-mirrored", USE_MIRRORED_CAMERA);
+    videoEl.classList.toggle("camera-unmirrored", !USE_MIRRORED_CAMERA);
+    videoEl.style.transform = USE_MIRRORED_CAMERA ? "scaleX(-1)" : "scaleX(1)";
+    videoEl.style.webkitTransform = USE_MIRRORED_CAMERA ? "scaleX(-1)" : "scaleX(1)";
+    videoEl.style.transformOrigin = "center center";
     await videoEl.play().catch(() => {});
     return mediaStream;
   }
@@ -18,6 +28,12 @@ export async function startCamera(videoEl) {
   videoEl.muted = true;
   videoEl.playsInline = true;
   videoEl.srcObject = mediaStream;
+  videoEl.dataset.cameraMirror = USE_MIRRORED_CAMERA ? "true" : "false";
+  videoEl.classList.toggle("camera-mirrored", USE_MIRRORED_CAMERA);
+  videoEl.classList.toggle("camera-unmirrored", !USE_MIRRORED_CAMERA);
+  videoEl.style.transform = USE_MIRRORED_CAMERA ? "scaleX(-1)" : "scaleX(1)";
+  videoEl.style.webkitTransform = USE_MIRRORED_CAMERA ? "scaleX(-1)" : "scaleX(1)";
+  videoEl.style.transformOrigin = "center center";
   await videoEl.play();
 
   return mediaStream;
@@ -44,7 +60,16 @@ export function captureFrameBase64(videoEl, canvasEl, quality = 0.85) {
   canvasEl.height = h;
 
   const ctx = canvasEl.getContext("2d");
-  ctx.drawImage(videoEl, 0, 0, w, h);
+  if (USE_MIRRORED_CAMERA) {
+    // Keep backend orientation same as preview when mirror mode is enabled.
+    ctx.save();
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoEl, 0, 0, w, h);
+    ctx.restore();
+  } else {
+    ctx.drawImage(videoEl, 0, 0, w, h);
+  }
 
   const dataUrl = canvasEl.toDataURL("image/jpeg", quality);
   return dataUrl.split(",")[1];

@@ -1,5 +1,5 @@
 import { byId, setText } from "./dom.js";
-import { startCamera, stopCamera, captureFrameBase64 } from "./camera.js";
+import { startCamera, stopCamera, captureFrameBase64 } from "./camera.js?v=20260314-camera-mirror";
 import {
   apiStartEnroll,
   apiPushFrame,
@@ -112,8 +112,8 @@ export function initEnroll() {
 
     const mirroredHint = {
       center: "DUZ BAK: Kameraya tam karsidan bak.",
-      left: "AYNA MODU: Basini KENDI SAGINA cevir (kamera SOL bekliyor).",
-      right: "AYNA MODU: Basini KENDI SOLUNA cevir (kamera SAG bekliyor).",
+      left: "Basini SOLA cevir.",
+      right: "Basini SAGA cevir.",
     };
     setText(
       angleGuideEl,

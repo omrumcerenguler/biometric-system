@@ -1,5 +1,5 @@
 import { byId, setText } from "./dom.js";
-import { startCamera, stopCamera, captureFrameBase64 } from "./camera.js";
+import { startCamera, stopCamera, captureFrameBase64 } from "./camera.js?v=20260314-camera-mirror";
 import {
   apiIdentifyFace,
   apiAuthVerify,
