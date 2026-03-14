@@ -10,7 +10,7 @@
 <body data-page="identify">
   <div class="app-container">
 
-    <div class="card" id="flowDebugPanel" style="border:1px dashed #3a6ea5; background:#122238; padding:10px 12px; margin-bottom:12px;">
+    <div class="card" id="flowDebugPanel" style="border:1px dashed #7fbef5; background:#d9efff; color:#1882d8; padding:10px 12px; margin-bottom:12px;">
       <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Flow Debug</h3>
       <p class="muted" style="margin:2px 0;">Step: <span id="flowDebugStep">-</span></p>
       <p class="muted" style="margin:2px 0;">Status: <span id="flowDebugStatus">-</span></p>
@@ -44,6 +44,8 @@
       <p id="identifiedUserBanner" style="display:none; background:#1e3a5f; color:#7ecfff; border:1px solid #3a6ea5; border-radius:6px; padding:7px 14px; margin-bottom:12px; font-size:0.9rem; text-align:center;">🔍 Identified as: <strong id="identifiedUserName"></strong></p>
       <h2>Liveness Challenge</h2>
       <p id="identifyChallengePrompt">Challenge question loading...</p>
+
+      <video id="livenessVideo" autoplay playsinline class="camera-frame"></video>
 
       <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
         <button class="btn" id="btnCaptureChallengeAnswer" type="button">Capture Spoken Answer</button>
@@ -90,6 +92,6 @@
 
   </div>
 
-  <script type="module" src="../assets/js/index.js?v=20260314-camera-mirror"></script>
+  <script type="module" src="../assets/js/index.js?v=20260314-liveness-preview"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@ import { trackPrevPage } from "./navigation.js";
 
 trackPrevPage();
 
-const FRONTEND_ASSET_VERSION = "20260314-camera-mirror";
+const FRONTEND_ASSET_VERSION = "20260314-liveness-preview";
 
 const page = document.body.dataset.page;
 

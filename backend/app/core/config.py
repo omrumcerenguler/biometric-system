@@ -13,11 +13,14 @@ class Settings(BaseSettings):
     FACE_IDENTIFICATION_THRESHOLD: float = 0.80
     FACE_LIVENESS_IDENTITY_THRESHOLD: float = 0.80
     FACE_POSE_IDENTITY_THRESHOLD: float = 0.70
-    FACE_POSE_MIN_DELTA: float = 0.08
+    FACE_POSE_MIN_DELTA: float = 0.12
+    # Additional absolute guards to prevent tiny movements from passing as full side turns.
+    FACE_POSE_RIGHT_MIN_NOSE_X: float = 0.62
+    FACE_POSE_LEFT_MAX_NOSE_X: float = 0.38
     VOICE_IDENTIFICATION_THRESHOLD: float = 0.70
     VOICE_TEMPLATE_UPDATE_THRESHOLD: float = 0.70
     FACE_LIVENESS_THRESHOLD: float = 0.80
     VOICE_LIVENESS_THRESHOLD: float = 0.70
-    FUSION_PASS_THRESHOLD: float = 0.82
+    FUSION_PASS_THRESHOLD: float = 0.70
 
 settings = Settings()

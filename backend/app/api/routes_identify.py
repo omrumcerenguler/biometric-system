@@ -147,6 +147,8 @@ async def identify_pose_check(req: PoseCheckRequest, session: AsyncSession = Dep
     # Side-turn frames naturally reduce face similarity. Use a dedicated threshold.
     pose_identity_thr = float(settings.FACE_POSE_IDENTITY_THRESHOLD)
     pose_min_delta = float(settings.FACE_POSE_MIN_DELTA)
+    right_abs_min = float(settings.FACE_POSE_RIGHT_MIN_NOSE_X)
+    left_abs_max = float(settings.FACE_POSE_LEFT_MAX_NOSE_X)
 
     try:
         img = b64_to_bgr_image(req.face_image_b64)
@@ -198,50 +200,13 @@ async def identify_pose_check(req: PoseCheckRequest, session: AsyncSession = Dep
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"INVALID_REFERENCE_IMAGE: {e}")
 
-        ref_face_vec, reference_nose_x = _auth_service.extract_face_embedding_and_pose(ref_img)
-        if ref_face_vec is None:
+        _ref_face_vec, reference_nose_x = _auth_service.extract_face_embedding_and_pose(ref_img)
+        if reference_nose_x is None:
             return {
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": None,
                 "reason": "REFERENCE_FACE_INVALID",
-            }
-
-        similarity = float(_auth_service._cosine(probe_face_vec, ref_face_vec))
-        if similarity < pose_identity_thr:
-            return {
-                "passed": False,
-                "required_turn": required,
-                "detected_turn": None,
-                "reason": "FACE_MISMATCH",
-                "similarity": similarity,
-                "threshold": pose_identity_thr,
-            }
-
-    if req.expected_user_id is not None:
-        expected_face_vec = await _auth_service._get_user_face_template(
-            session=session,
-            user_id=int(req.expected_user_id),
-        )
-        if expected_face_vec is None:
-            return {
-                "passed": False,
-                "required_turn": required,
-                "detected_turn": None,
-                "reason": "EXPECTED_USER_TEMPLATE_MISSING",
-                "similarity": similarity,
-            }
-
-        template_similarity = float(_auth_service._cosine(probe_face_vec, expected_face_vec))
-        if template_similarity < pose_identity_thr:
-            return {
-                "passed": False,
-                "required_turn": required,
-                "detected_turn": None,
-                "reason": "FACE_MISMATCH",
-                "similarity": template_similarity,
-                "reference_similarity": similarity,
-                "threshold": pose_identity_thr,
             }
 
     detected = _bucket_nose_ratio(nose_x)
@@ -256,8 +221,85 @@ async def identify_pose_check(req: PoseCheckRequest, session: AsyncSession = Dep
         else:
             detected = "center"
 
-    passed = detected == required
-    reason = "OK" if passed else ("POSE_NOT_ENOUGH_TURN" if detected == "center" else "POSE_MISMATCH")
+    if detected != required:
+        return {
+            "passed": False,
+            "required_turn": required,
+            "detected_turn": detected,
+            "reason": "POSE_NOT_ENOUGH_TURN" if detected == "center" else "POSE_MISMATCH",
+            "similarity": None,
+            "reference_similarity": None,
+            "reference_nose_x": reference_nose_x,
+            "nose_x": nose_x,
+            "pose_min_delta": pose_min_delta,
+        }
+
+    # Absolute side guard: reject near-frontal frames even if delta briefly crosses threshold.
+    if required == "right" and (nose_x is None or float(nose_x) < right_abs_min):
+        return {
+            "passed": False,
+            "required_turn": required,
+            "detected_turn": "center",
+            "reason": "POSE_NOT_ENOUGH_TURN",
+            "similarity": None,
+            "reference_similarity": None,
+            "reference_nose_x": reference_nose_x,
+            "nose_x": nose_x,
+            "pose_min_delta": pose_min_delta,
+            "right_abs_min": right_abs_min,
+        }
+
+    if required == "left" and (nose_x is None or float(nose_x) > left_abs_max):
+        return {
+            "passed": False,
+            "required_turn": required,
+            "detected_turn": "center",
+            "reason": "POSE_NOT_ENOUGH_TURN",
+            "similarity": None,
+            "reference_similarity": None,
+            "reference_nose_x": reference_nose_x,
+            "nose_x": nose_x,
+            "pose_min_delta": pose_min_delta,
+            "left_abs_max": left_abs_max,
+        }
+
+    # Turn direction is valid. Now verify identity only with the requested lateral template.
+    if req.expected_user_id is not None:
+        expected_face_vec = await _auth_service._get_user_face_template(
+            session=session,
+            user_id=int(req.expected_user_id),
+            pose=required,
+        )
+        if expected_face_vec is None:
+            return {
+                "passed": False,
+                "required_turn": required,
+                "detected_turn": detected,
+                "reason": "EXPECTED_USER_POSE_TEMPLATE_MISSING",
+                "similarity": similarity,
+                "reference_similarity": None,
+                "reference_nose_x": reference_nose_x,
+                "nose_x": nose_x,
+                "pose_min_delta": pose_min_delta,
+            }
+
+        template_similarity = float(_auth_service._cosine(probe_face_vec, expected_face_vec))
+        if template_similarity < pose_identity_thr:
+            return {
+                "passed": False,
+                "required_turn": required,
+                "detected_turn": detected,
+                "reason": "FACE_MISMATCH",
+                "similarity": template_similarity,
+                "reference_similarity": None,
+                "threshold": pose_identity_thr,
+                "reference_nose_x": reference_nose_x,
+                "nose_x": nose_x,
+                "pose_min_delta": pose_min_delta,
+            }
+
+    passed = True
+    reason = "OK"
 
     return {
         "passed": passed,

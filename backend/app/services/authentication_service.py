@@ -16,6 +16,14 @@ from app.services.fusion import fuse
 from app.services.voice_processor import VoiceProcessor, VoiceFeatures
 
 
+FACE_TEMPLATE_TYPE_BY_POSE = {
+    "center": "face_feature_center",
+    "left": "face_feature_left",
+    "right": "face_feature_right",
+}
+LEGACY_FACE_TEMPLATE_TYPE = "face_feature"
+
+
 class AuthenticationService:
     def __init__(self) -> None:
         self.face = FaceProcessor()
@@ -145,6 +153,82 @@ class AuthenticationService:
     # =====================================================
     # Enrollment - FACE
     # =====================================================
+
+    async def _upsert_biometric_vector(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        bio_type: str,
+        vec: np.ndarray,
+    ) -> None:
+        blob = self._l2norm(vec).astype(np.float32).tobytes()
+        result = await session.execute(
+            select(BiometricData).where(
+                BiometricData.user_id == user_id,
+                BiometricData.type == bio_type,
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.enc_feature_blob = blob
+            return
+
+        session.add(
+            BiometricData(
+                type=bio_type,
+                enc_feature_blob=blob,
+                user_id=user_id,
+            )
+        )
+
+    async def enroll_user_with_pose_templates(
+        self,
+        session: AsyncSession,
+        username: str,
+        role: str,
+        pose_templates: dict[str, np.ndarray],
+        n_samples_by_pose: dict[str, int],
+    ) -> dict:
+        result = await session.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            return {"status": "FAILED", "reason": "USER_NOT_FOUND"}
+
+        saved_poses: list[str] = []
+        for pose, bio_type in FACE_TEMPLATE_TYPE_BY_POSE.items():
+            vec = pose_templates.get(pose)
+            if vec is None:
+                continue
+            await self._upsert_biometric_vector(
+                session=session,
+                user_id=user.user_id,
+                bio_type=bio_type,
+                vec=vec,
+            )
+            saved_poses.append(pose)
+
+        # Backward compatibility: keep the legacy face template for generic flows.
+        center_vec = pose_templates.get("center")
+        if center_vec is not None:
+            await self._upsert_biometric_vector(
+                session=session,
+                user_id=user.user_id,
+                bio_type=LEGACY_FACE_TEMPLATE_TYPE,
+                vec=center_vec,
+            )
+
+        await session.commit()
+        return {
+            "status": "ENROLLED",
+            "user_id": user.user_id,
+            "saved_poses": saved_poses,
+            "samples_by_pose": {
+                "center": int(n_samples_by_pose.get("center", 0)),
+                "left": int(n_samples_by_pose.get("left", 0)),
+                "right": int(n_samples_by_pose.get("right", 0)),
+            },
+        }
 
     async def enroll_user_with_template(
         self,
@@ -326,22 +410,66 @@ class AuthenticationService:
         self,
         session: AsyncSession,
         user_id: int,
+        pose: str = "center",
     ) -> Optional[np.ndarray]:
+        pose_key = (pose or "center").strip().lower()
+        type_candidates: list[str] = []
+
+        if pose_key in FACE_TEMPLATE_TYPE_BY_POSE:
+            type_candidates.append(FACE_TEMPLATE_TYPE_BY_POSE[pose_key])
+
+        if pose_key == "center":
+            type_candidates.append(LEGACY_FACE_TEMPLATE_TYPE)
+
+        if not type_candidates:
+            type_candidates = [LEGACY_FACE_TEMPLATE_TYPE]
+
+        for bio_type in type_candidates:
+            result = await session.execute(
+                select(BiometricData).where(
+                    BiometricData.user_id == user_id,
+                    BiometricData.type == bio_type,
+                )
+            )
+            bio = result.scalar_one_or_none()
+
+            if not bio or not bio.enc_feature_blob:
+                continue
+
+            vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+            if vec.size == 0:
+                continue
+
+            return self._l2norm(vec)
+
+        return None
+
+    async def _get_best_face_template_for_identification(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> Optional[np.ndarray]:
+        # Prefer center-specific template; fall back to legacy template.
         result = await session.execute(
             select(BiometricData).where(
                 BiometricData.user_id == user_id,
-                BiometricData.type == "face_feature",
+                BiometricData.type.in_(
+                    [FACE_TEMPLATE_TYPE_BY_POSE["center"], LEGACY_FACE_TEMPLATE_TYPE]
+                ),
             )
         )
-        bio = result.scalar_one_or_none()
-
-        if not bio or not bio.enc_feature_blob:
+        rows = result.scalars().all()
+        if not rows:
             return None
 
-        vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+        by_type = {row.type: row for row in rows}
+        preferred = by_type.get(FACE_TEMPLATE_TYPE_BY_POSE["center"]) or by_type.get(LEGACY_FACE_TEMPLATE_TYPE)
+        if not preferred or not preferred.enc_feature_blob:
+            return None
+
+        vec = np.frombuffer(preferred.enc_feature_blob, dtype=np.float32)
         if vec.size == 0:
             return None
-
         return self._l2norm(vec)
 
     # =====================================================
@@ -365,6 +493,14 @@ class AuthenticationService:
                 "reason": "NO_FACE_DETECTED",
             }
 
+        # Mirror-safe matching: compare against both original and horizontally flipped query.
+        flipped_query_vec = None
+        try:
+            flipped_img = np.ascontiguousarray(face_img[:, ::-1])
+            flipped_query_vec = self.extract_face_embedding(flipped_img)
+        except Exception:
+            flipped_query_vec = None
+
         # First capture must be frontal enough to reduce side-pose false positives.
         if nose_x_ratio is None or nose_x_ratio < 0.44 or nose_x_ratio > 0.56:
             return {
@@ -387,20 +523,21 @@ class AuthenticationService:
                 "reason": "EYES_NOT_CLEAR",
             }
 
-        result = await session.execute(
-            select(User, BiometricData)
-            .join(BiometricData)
-            .where(BiometricData.type == "face_feature")
-        )
-
         best_score = -1.0
         best_user = None
 
-        for user, bio in result.all():
-            db_vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
-            db_vec = self._l2norm(db_vec)
+        user_result = await session.execute(select(User))
+        for user in user_result.scalars().all():
+            db_vec = await self._get_best_face_template_for_identification(
+                session=session,
+                user_id=user.user_id,
+            )
+            if db_vec is None:
+                continue
 
             sim = self._cosine(query_vec, db_vec)
+            if flipped_query_vec is not None:
+                sim = max(sim, self._cosine(flipped_query_vec, db_vec))
             if sim > best_score:
                 best_score = sim
                 best_user = user

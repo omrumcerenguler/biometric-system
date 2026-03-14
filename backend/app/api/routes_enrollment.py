@@ -177,12 +177,12 @@ async def enroll_voice(req: EnrollVoiceRequest, session: AsyncSession = Depends(
     if status in {"VOICE_ENROLLED", "VOICE_UPDATED", "VOICE_ALREADY_REGISTERED"}:
         pending = PENDING_FACE_TEMPLATES.get(username)
         if pending:
-            face_result = await _auth_service.enroll_user_with_template(
+            face_result = await _auth_service.enroll_user_with_pose_templates(
                 session=session,
                 username=username,
                 role=role,
-                face_template=pending["face_template"],
-                n_samples=int(pending.get("n_samples", 0)),
+                pose_templates=pending.get("pose_templates", {}),
+                n_samples_by_pose=pending.get("samples_by_pose", {}),
             )
             if face_result.get("reason") != "USER_NOT_FOUND":
                 PENDING_FACE_TEMPLATES.pop(username, None)
@@ -245,12 +245,12 @@ async def enroll_voice_batch(req: EnrollVoiceBatchRequest, session: AsyncSession
     if status in {"VOICE_ENROLLED", "VOICE_UPDATED", "VOICE_ALREADY_REGISTERED"}:
         pending = PENDING_FACE_TEMPLATES.get(username)
         if pending:
-            face_result = await _auth_service.enroll_user_with_template(
+            face_result = await _auth_service.enroll_user_with_pose_templates(
                 session=session,
                 username=username,
                 role=role,
-                face_template=pending["face_template"],
-                n_samples=int(pending.get("n_samples", 0)),
+                pose_templates=pending.get("pose_templates", {}),
+                n_samples_by_pose=pending.get("samples_by_pose", {}),
             )
             if face_result.get("reason") != "USER_NOT_FOUND":
                 PENDING_FACE_TEMPLATES.pop(username, None)
@@ -327,6 +327,7 @@ async def start(req: EnrollStartRequest, session: AsyncSession = Depends(get_ses
         "username": username,
         "role": role,
         "embeddings": [],  # List[np.ndarray]
+        "embeddings_by_angle": {"center": [], "left": [], "right": []},
         "accepted": 0,
         "target": TARGET_SAMPLES,
         "angle_counts": {"center": 0, "left": 0, "right": 0},
@@ -404,6 +405,7 @@ async def push_frame(req: EnrollFrameRequest):
         )
 
     s["embeddings"].append(emb)
+    s["embeddings_by_angle"][required_angle].append(emb)
     s["accepted"] += 1
     s["angle_counts"][required_angle] += 1
 
@@ -438,14 +440,30 @@ async def finish(req: EnrollFinishRequest, session: AsyncSession = Depends(get_s
     if len(embs) < 5:
         raise HTTPException(status_code=400, detail="NOT_ENOUGH_SAMPLES(min=5)")
 
-    # template = mean + normalize
-    template = np.mean(np.stack(embs, axis=0), axis=0)
-    template = template / (np.linalg.norm(template) + 1e-9)
+    by_angle: Dict[str, List[np.ndarray]] = s.get("embeddings_by_angle", {})
+    pose_templates: Dict[str, np.ndarray] = {}
+    for pose in ANGLE_SEQUENCE:
+        samples = by_angle.get(pose, [])
+        if not samples:
+            continue
+        template = np.mean(np.stack(samples, axis=0), axis=0)
+        template = template / (np.linalg.norm(template) + 1e-9)
+        pose_templates[pose] = template
 
-    # Stage face template in memory. Persist only after voice enrollment succeeds.
+    if "center" not in pose_templates:
+        raise HTTPException(status_code=400, detail="CENTER_TEMPLATE_MISSING")
+
+    samples_by_pose = {
+        "center": len(by_angle.get("center", [])),
+        "left": len(by_angle.get("left", [])),
+        "right": len(by_angle.get("right", [])),
+    }
+
+    # Stage pose-aware face templates in memory. Persist only after voice enrollment succeeds.
     PENDING_FACE_TEMPLATES[s["username"]] = {
-        "face_template": template,
+        "pose_templates": pose_templates,
         "n_samples": len(embs),
+        "samples_by_pose": samples_by_pose,
         "created_at": time(),
     }
 
@@ -454,5 +472,6 @@ async def finish(req: EnrollFinishRequest, session: AsyncSession = Depends(get_s
     return {
         "status": "FACE_STAGED",
         "n_samples": len(embs),
+        "samples_by_pose": samples_by_pose,
         "message": "Face template staged. It will be saved after voice enrollment succeeds.",
     }

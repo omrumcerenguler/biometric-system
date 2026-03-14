@@ -34,6 +34,7 @@ export function initIdentify() {
 
   // --- elements ---
   const videoEl = byId("video");
+  const livenessVideoEl = byId("livenessVideo");
   const canvasEl = byId("canvas");
 
   const faceStatusEl = byId("faceStatus");
@@ -82,6 +83,14 @@ export function initIdentify() {
   let livenessOrder = [];
   let livenessStepIndex = 0;
   let flowDebugHistory = [];
+
+  function getCaptureVideoEl() {
+    const livenessStepEl = byId("step-liveness");
+    if (livenessStepEl && !livenessStepEl.classList.contains("hidden") && livenessVideoEl) {
+      return livenessVideoEl;
+    }
+    return videoEl;
+  }
 
   // --- status helpers ---
   function setFaceStatus(msg) {
@@ -250,7 +259,7 @@ export function initIdentify() {
   async function captureBurstFrames({ count = 10, intervalMs = 90 } = {}) {
     const frames = [];
     for (let i = 0; i < count; i += 1) {
-      const frame = captureFrameBase64(videoEl, canvasEl);
+      const frame = captureFrameBase64(getCaptureVideoEl(), canvasEl);
       if (frame) frames.push(frame);
       await sleep(intervalMs);
     }
@@ -410,6 +419,7 @@ export function initIdentify() {
 
       // Face tamam -> Liveness challenge step
       showStep("step-liveness");
+      await startCamera(livenessVideoEl);
       await loadIdentifyChallenge();
 
       // Show identified user banner
@@ -529,7 +539,7 @@ export function initIdentify() {
         setFlowDebug(flowStepName(currentTask()), "failed", "STEP_ORDER_MISMATCH");
         return;
       }
-      const frame = captureFrameBase64(videoEl, canvasEl);
+      const frame = captureFrameBase64(getCaptureVideoEl(), canvasEl);
       if (!frame) {
         setLivenessStatus("Start camera first.");
         setFlowDebug("turn_right", "failed", "NO_FACE_FRAME");
@@ -568,7 +578,7 @@ export function initIdentify() {
         setFlowDebug(flowStepName(currentTask()), "failed", "STEP_ORDER_MISMATCH");
         return;
       }
-      const frame = captureFrameBase64(videoEl, canvasEl);
+      const frame = captureFrameBase64(getCaptureVideoEl(), canvasEl);
       if (!frame) {
         setLivenessStatus("Start camera first.");
         setFlowDebug("turn_left", "failed", "NO_FACE_FRAME");
@@ -715,7 +725,7 @@ export function initIdentify() {
   // 5) Restart
   // -----------------------
   function restart() {
-    stopCamera([videoEl]);
+    stopCamera([videoEl, livenessVideoEl]);
     faceB64 = null;
     faceScore = 0;
     identifiedUser = null;
@@ -757,4 +767,17 @@ export function initIdentify() {
 
   btnRestartResult?.addEventListener("click", restart);
   window.restartVerify = restart;
+
+  // If browser restores this page from bfcache/history, clear stale verification state.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      restart();
+      return;
+    }
+
+    const navEntry = performance.getEntriesByType("navigation")[0];
+    if (navEntry && navEntry.type === "back_forward") {
+      restart();
+    }
+  });
 }
