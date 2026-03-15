@@ -591,14 +591,24 @@ export function initEnroll() {
       const res = await apiEnrollVoiceBatch(username, role, voiceSamples);
       console.log("[VOICE ENROLL STATUS]", res?.status, res?.reason || "");
 
-      if ((res?.status || "").toUpperCase() === "FAILED") {
+      const status = (res?.status || "").trim().toUpperCase();
+      if (status === "VOICE_ALREADY_REGISTERED_OTHER_USER") {
+        setVoiceStatus("❌ Bu ses zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
+        alert("❌ Bu ses zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
+        // Son sample'ı sil, kullanıcı tekrar denesin
+        voiceSamples.pop();
+        updateVoiceSampleProgress();
+        if (btnVoiceStart) btnVoiceStart.disabled = false;
+        return;
+      }
+
+      if (status === "FAILED") {
         const detail = res?.detail ? ` (${JSON.stringify(res.detail)})` : "";
         setVoiceStatus(`Voice enroll failed: ${res?.reason || "UNKNOWN_ERROR"}${detail}`);
       } else {
         setVoiceStatus(res?.status ? `Voice enrolled: ${res.status}` : "Voice enrolled.");
       }
 
-      const status = (res?.status || "").toUpperCase();
       if (
         status === "VOICE_ENROLLED" ||
         status === "VOICE_UPDATED" ||

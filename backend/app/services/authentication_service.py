@@ -392,6 +392,32 @@ class AuthenticationService:
 
         blob = v.astype(np.float32).tobytes()
 
+        # --- YENİ: Başka kullanıcıya ait ses kontrolü ---
+        result_all = await session.execute(
+            select(BiometricData, User)
+            .join(User, BiometricData.user_id == User.user_id)
+            .where(
+                BiometricData.type == "voice_feature",
+                BiometricData.user_id != user.user_id
+            )
+        )
+        all_voice_data = result_all.all()
+        for other_voice, other_user in all_voice_data:
+            other_vec = np.frombuffer(other_voice.enc_feature_blob, dtype=np.float32)
+            other_vec = self._l2norm(other_vec)
+            sim = self._cosine(v, other_vec)
+            print(f"[DEBUG][VOICE] Compare {user.username} vs {other_user.username} | sim={sim:.4f}")
+            if sim >= 0.80:
+                print(f"[DEBUG][VOICE] BLOCKED: {user.username} ile {other_user.username} aynı ses! sim={sim:.4f}")
+                return {
+                    "status": "VOICE_ALREADY_REGISTERED_OTHER_USER",
+                    "reason": "This voice is already registered to another user.",
+                    "similarity": float(sim),
+                    "other_user_id": other_user.user_id,
+                    "other_username": other_user.username,
+                }
+
+        # --- Kendi kaydıyla karşılaştırma ve güncelleme ---
         result2 = await session.execute(
             select(BiometricData).where(
                 BiometricData.user_id == user.user_id,
