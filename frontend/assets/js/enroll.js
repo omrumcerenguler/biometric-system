@@ -1,18 +1,13 @@
 import { byId, setText } from "./dom.js";
 import { startCamera, stopCamera, captureFrameBase64 } from "./camera.js?v=20260314-camera-mirror";
-import {
-  apiStartEnroll,
-  apiPushFrame,
-  apiFinishEnroll,
-  apiEnrollVoiceBatch,
-  apiGetVoiceChallenge,
-} from "./api.js";
+import { apiEnrollBiometric } from "./api.js";
 import {
   startVoiceRecording,
   stopVoiceRecordingToBase64,
 } from "./voice.js";
 
 export function initEnroll() {
+  // ---------- DOM ----------
   const enrollUserEl = byId("enrollUser");
 
   const faceStepEl = byId("faceStep");
@@ -34,12 +29,9 @@ export function initEnroll() {
   const btnStartCam = byId("btnStartCam");
   const btnStopCam = byId("btnStopCam");
   const btnStartEnroll = byId("btnStartEnroll");
-  const btnStopEnroll = byId("btnStopEnroll");
 
   const progressTextEl = byId("progressText");
   const progressBarEl = byId("progressBar");
-  const angleStatusEl = byId("angleStatus");
-  const angleGuideEl = byId("angleGuide");
   const statusTextEl = byId("statusText");
 
   const btnVoiceStart = byId("btnVoiceStart");
@@ -49,6 +41,7 @@ export function initEnroll() {
   const audioPreview = byId("audioPreview");
   const voiceStatusEl = byId("voiceStatus");
 
+  // ---------- Auth / User ----------
   const query = new URLSearchParams(window.location.search);
   const storageUsername = (localStorage.getItem("portalUsername") || "").trim();
   const storageRole = (localStorage.getItem("portalRole") || "").trim();
@@ -60,7 +53,7 @@ export function initEnroll() {
   const isLoggedIn = localStorage.getItem("portalLoggedIn") === "true";
 
   if (enrollUserEl) {
-    enrollUserEl.textContent = username ? username : "Not signed in";
+    enrollUserEl.textContent = username || "Not signed in";
   }
 
   if (!storageUsername && queryUsername) {
@@ -75,20 +68,27 @@ export function initEnroll() {
     return;
   }
 
-  let sessionId = null;
-  let isCapturing = false;
-  let captureTimer = null;
-  let frameInFlight = false;
-  let targetSamples = 15;
-  let acceptedSamples = 0;
-  let voiceB64 = null;
-  let voiceChallengeId = null;
-  let voiceSamples = [];
-  let voiceListening = false;
-  let faceEnrollmentCompleted = false;
-  let voiceEnrollmentCompleted = false;
+  // ---------- State ----------
+  const FACE_TARGET_SAMPLES = 15;
   const VOICE_TARGET_SAMPLES = 5;
 
+  const VOICE_PROMPTS = [
+    "Bugun biyometrik kayit islemi yapiyorum",
+    "Kameraya bakiyorum ve net konusuyorum",
+    "Ses ve yuz verilerim sisteme kaydedilecek",
+    "Bu sistem guvenli giris icin kullaniliyor",
+    "Kayit islemimi basariyla tamamlamak istiyorum",
+  ];
+
+  let faceSamples = [];
+  let voiceSamples = [];
+  let voiceListening = false;
+
+  let faceEnrollmentCompleted = false;
+  let voiceEnrollmentCompleted = false;
+  let biometricSubmitCompleted = false;
+
+  // ---------- Helpers ----------
   function setStatus(msg) {
     setText(statusTextEl, msg);
     console.log("[ENROLL]", msg);
@@ -101,43 +101,6 @@ export function initEnroll() {
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  function setAngleStatus(requiredAngle, angleCounts) {
-    const counts = angleCounts || { center: 0, left: 0, right: 0 };
-    setText(
-      angleStatusEl,
-      `Required angle: ${requiredAngle} (center:${counts.center} left:${counts.left} right:${counts.right})`
-    );
-
-    const mirroredHint = {
-      center: "DUZ BAK: Kameraya tam karsidan bak.",
-      left: "Basini SOLA cevir.",
-      right: "Basini SAGA cevir.",
-    };
-    setText(
-      angleGuideEl,
-      mirroredHint[requiredAngle] || "Yuzunu kamerada istenen yone cevir."
-    );
-  }
-
-  function updateVoiceSampleProgress() {
-    const current = Math.min(voiceSamples.length + 1, VOICE_TARGET_SAMPLES);
-    setText(
-      voiceSampleProgressEl,
-      `Saved ${voiceSamples.length}/${VOICE_TARGET_SAMPLES} samples. Current prompt ${current}/${VOICE_TARGET_SAMPLES}`
-    );
-  }
-
-  function resetCurrentVoiceCapture() {
-    voiceB64 = null;
-    setText(voiceTranscriptPreviewEl, "Waiting for phrase...");
-    if (audioPreview) {
-      audioPreview.pause?.();
-      audioPreview.src = "";
-      audioPreview.classList.add("hidden");
-    }
-    if (btnVoiceStart) btnVoiceStart.disabled = false;
   }
 
   function normalizeText(value) {
@@ -154,47 +117,43 @@ export function initEnroll() {
       .trim();
   }
 
-  function extractSpeakTarget(promptText) {
-    const raw = String(promptText || "").trim();
-    if (!raw) return "";
-    const idx = raw.indexOf(":");
-    if (idx >= 0 && idx < raw.length - 1) {
-      return raw.slice(idx + 1).trim();
-    }
-    return raw;
-  }
-
   function phraseMatchScore(expectedText, spokenText) {
     const expected = normalizeText(expectedText);
     const spoken = normalizeText(spokenText);
+
     if (!expected || !spoken) {
       return { score: 0, hitCount: 0, expectedCount: 0, charRatio: 0 };
     }
 
     const expectedWords = expected.split(" ").filter(Boolean);
     const expectedCount = expectedWords.length;
+
     if (!expectedCount) {
       return { score: 0, hitCount: 0, expectedCount: 0, charRatio: 0 };
     }
 
-    let hit = 0;
-    for (const w of expectedWords) {
-      if (spoken.includes(w)) hit += 1;
+    let hitCount = 0;
+    for (const word of expectedWords) {
+      if (spoken.includes(word)) hitCount += 1;
     }
 
-    // Spoken length must also be close to expected length to avoid early partial matches.
     const charRatio = Math.min(1, spoken.length / Math.max(expected.length, 1));
 
-    let score = hit / expectedCount;
+    let score = hitCount / expectedCount;
     if (spoken.includes(expected)) {
-      score = 1.0;
+      score = 1;
     }
 
-    return { score, hitCount: hit, expectedCount, charRatio };
+    return { score, hitCount, expectedCount, charRatio };
   }
 
-  async function recognizePhraseUntilMatch(expectedText, { lang = "tr-TR", timeoutMs = 10000 } = {}) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  async function recognizePhraseUntilMatch(
+    expectedText,
+    { lang = "tr-TR", timeoutMs = 10000 } = {}
+  ) {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
       throw new Error("SPEECH_RECOGNITION_UNSUPPORTED");
     }
@@ -209,7 +168,7 @@ export function initEnroll() {
       const finish = (fn, value) => {
         if (done) return;
         done = true;
-        clearTimeout(timer);
+        clearTimeout(timeoutTimer);
         if (pendingFinalizeTimer) {
           clearTimeout(pendingFinalizeTimer);
           pendingFinalizeTimer = null;
@@ -230,31 +189,33 @@ export function initEnroll() {
         for (let i = 0; i < event.results.length; i += 1) {
           transcript += `${event.results[i][0]?.transcript || ""} `;
         }
+
         transcript = transcript.trim();
         if (!transcript) return;
+
+        setText(voiceTranscriptPreviewEl, transcript);
 
         const match = phraseMatchScore(expectedText, transcript);
         if (match.score > bestScore) {
           bestScore = match.score;
           bestTranscript = transcript;
-          setText(voiceTranscriptPreviewEl, transcript);
         }
 
         const latest = event.results[event.resultIndex];
         const isFinal = !!latest?.isFinal;
 
-        // Auto-complete only on final ASR segments and near-complete sentence coverage.
-        const enoughWords = match.expectedCount > 0 && match.hitCount >= Math.max(2, match.expectedCount - 2);
+        const enoughWords =
+          match.expectedCount > 0 &&
+          match.hitCount >= Math.max(2, match.expectedCount - 1);
         const enoughLength = match.charRatio >= 0.75;
-        const strongScore = match.score >= 0.70;
+        const strongScore = match.score >= 0.7;
 
         if (pendingFinalizeTimer) {
           clearTimeout(pendingFinalizeTimer);
           pendingFinalizeTimer = null;
         }
 
-        if (isFinal && strongScore && enoughWords && enoughLength) {
-          // Small grace delay to avoid early cut-offs right after finalization.
+        if (isFinal && enoughWords && enoughLength && strongScore) {
           pendingFinalizeTimer = setTimeout(() => {
             finish(resolve, { transcript, score: match.score });
           }, 700);
@@ -262,12 +223,14 @@ export function initEnroll() {
       };
 
       recognition.onerror = (event) => {
-        const code = event?.error ? `SPEECH_${String(event.error).toUpperCase()}` : "SPEECH_ERROR";
+        const code = event?.error
+          ? `SPEECH_${String(event.error).toUpperCase()}`
+          : "SPEECH_ERROR";
         finish(reject, new Error(code));
       };
 
-      const timer = setTimeout(() => {
-        if (bestScore >= 0.70 && bestTranscript) {
+      const timeoutTimer = setTimeout(() => {
+        if (bestScore >= 0.7 && bestTranscript) {
           finish(resolve, { transcript: bestTranscript, score: bestScore });
           return;
         }
@@ -278,17 +241,51 @@ export function initEnroll() {
     });
   }
 
-  function setProgress(count, target) {
-    acceptedSamples = count;
-    targetSamples = target;
+  function resetAudioPreview() {
+    if (!audioPreview) return;
+    audioPreview.pause?.();
+    audioPreview.src = "";
+    audioPreview.classList.add("hidden");
+  }
 
-    setText(progressTextEl, `${count}/${target}`);
+  function updateFaceProgress() {
+    const current = Math.min(faceSamples.length, FACE_TARGET_SAMPLES);
+    setText(progressTextEl, `${current}/${FACE_TARGET_SAMPLES}`);
 
     if (progressBarEl) {
-      const pct =
-        target > 0 ? Math.min(100, Math.round((count / target) * 100)) : 0;
+      const pct = Math.min(
+        100,
+        Math.round((current / FACE_TARGET_SAMPLES) * 100)
+      );
       progressBarEl.style.width = `${pct}%`;
     }
+  }
+
+  function updateVoiceSampleProgress() {
+    setText(
+      voiceSampleProgressEl,
+      `Saved ${voiceSamples.length}/${VOICE_TARGET_SAMPLES} samples`
+    );
+  }
+
+  function getCurrentVoicePrompt() {
+    return VOICE_PROMPTS[voiceSamples.length] || "";
+  }
+
+  function updateVoicePrompt() {
+    if (voiceEnrollmentCompleted) {
+      setText(
+        voiceChallengePromptEl,
+        `${VOICE_TARGET_SAMPLES} samples captured. Voice enrollment completed.`
+      );
+      return;
+    }
+
+    const prompt = getCurrentVoicePrompt();
+    setText(
+      voiceChallengePromptEl,
+      prompt || "Please read the displayed sentence clearly."
+    );
   }
 
   function showFaceStep() {
@@ -300,7 +297,7 @@ export function initEnroll() {
     setText(stepTitleEl, "Face Enrollment");
     setText(
       stepDescriptionEl,
-      "Start the camera, then begin enrollment. The system will collect multiple face samples automatically."
+      "Start the camera and collect face samples first."
     );
   }
 
@@ -313,33 +310,14 @@ export function initEnroll() {
     setText(stepTitleEl, "Voice Enrollment");
     setText(
       stepDescriptionEl,
-      `Read the shown sentence clearly. After ${VOICE_TARGET_SAMPLES} samples voice enrollment completes automatically.`
+      `Record ${VOICE_TARGET_SAMPLES} voice samples by reading the shown sentence.`
     );
 
-    if (!voiceChallengeId) {
-      loadVoiceChallenge();
-    }
+    updateVoicePrompt();
     updateVoiceSampleProgress();
   }
 
-  async function loadVoiceChallenge() {
-    try {
-      const usedIds = voiceSamples.map((sample) => sample.challenge_id);
-      const challenge = await apiGetVoiceChallenge(username, usedIds);
-      voiceChallengeId = challenge?.challenge_id || null;
-      setText(
-        voiceChallengePromptEl,
-        challenge?.prompt || "Please read the displayed sentence clearly."
-      );
-      resetCurrentVoiceCapture();
-    } catch (e) {
-      console.error(e);
-      setText(voiceChallengePromptEl, "Okunacak metin alinamadi.");
-      voiceChallengeId = null;
-    }
-  }
-
-  function showCompleteStep() {
+  function showCompleteStep(message = "Biometric enrollment completed successfully.") {
     faceStepEl?.classList.add("hidden");
     voiceStepEl?.classList.add("hidden");
     completeStepEl?.classList.remove("hidden");
@@ -350,78 +328,34 @@ export function initEnroll() {
       stepDescriptionEl,
       "Your face and voice enrollment steps have been completed successfully."
     );
-    setText(
-      completeStatusEl,
-      "Biometric enrollment completed successfully."
-    );
+    setText(completeStatusEl, message);
   }
 
   function updateStepButtons() {
-    // Yüz kaydı tamamlanmasa bile kullanıcı Continue to Voice butonuna basabilsin
     if (btnGoVoice) {
-      btnGoVoice.disabled = false;
+      btnGoVoice.disabled = !faceEnrollmentCompleted;
     }
 
     if (btnGoComplete) {
-      btnGoComplete.disabled = !voiceEnrollmentCompleted;
+      btnGoComplete.disabled =
+        !faceEnrollmentCompleted ||
+        !voiceEnrollmentCompleted ||
+        biometricSubmitCompleted;
+    }
+
+    if (btnVoiceStart) {
+      btnVoiceStart.disabled =
+        voiceListening ||
+        voiceEnrollmentCompleted ||
+        biometricSubmitCompleted;
+    }
+
+    if (btnStartEnroll) {
+      btnStartEnroll.disabled = biometricSubmitCompleted;
     }
   }
 
-  async function stopEnrollmentFlow(doFinish) {
-    if (!isCapturing) return;
-
-    isCapturing = false;
-
-    if (captureTimer) {
-      clearInterval(captureTimer);
-      captureTimer = null;
-    }
-
-    if (btnStartEnroll) btnStartEnroll.disabled = false;
-    if (btnStopEnroll) btnStopEnroll.disabled = true;
-
-    if (doFinish && sessionId) {
-      try {
-        const result = await apiFinishEnroll(sessionId);
-        console.log("[DEBUG][ENROLL FINISH RESULT]", result);
-        const nSamples = result?.n_samples ?? acceptedSamples;
-        // status'u normalize et
-        let status = (result?.status || "").trim().toUpperCase();
-        console.log("[DEBUG][ENROLL FINISH STATUS]", status);
-        // Eğer başka kullanıcıya aitse bariz uyarı göster ve akışı durdur
-        if (status === "FACE_ALREADY_REGISTERED_OTHER_USER") {
-          setStatus("❌ Bu yüz zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
-          alert("❌ Bu yüz zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
-          return;
-        }
-        setStatus(`Saved: ${result?.status || "OK"} (samples: ${nSamples})`);
-
-        // Sadece başarılı durumlarda otomatik geçiş yap
-        if (
-          status !== "FACE_ALREADY_REGISTERED_OTHER_USER" && (
-            nSamples > 0 ||
-            status === "FACE_STAGED" ||
-            status === "ENROLLED" ||
-            status === "FACE_UPDATED" ||
-            status === "FACE_ALREADY_REGISTERED"
-          )
-        ) {
-          faceEnrollmentCompleted = true;
-          updateStepButtons();
-          setStatus(`Face enrollment complete. Switching to voice step...`);
-          setTimeout(() => {
-            showVoiceStep();
-          }, 300);
-        }
-      } catch (e) {
-        console.error(e);
-        setStatus(`Finish error: ${e.message || "UNKNOWN_ERROR"}`);
-      }
-    } else {
-      setStatus("Enrollment stopped.");
-    }
-  }
-
+  // ---------- Camera ----------
   btnStartCam?.addEventListener("click", async () => {
     try {
       setStatus("Requesting camera...");
@@ -438,208 +372,157 @@ export function initEnroll() {
     setStatus("Camera stopped.");
   });
 
+  // ---------- Face ----------
   btnStartEnroll?.addEventListener("click", async () => {
-    if (isCapturing) return;
-
-    const hasCamera = !!videoEl?.srcObject;
-    if (!hasCamera) {
-      setStatus("Start camera first.");
-      return;
-    }
-
     try {
-      setStatus("Starting enrollment...");
-      setProgress(0, 15);
-      sessionId = null;
-
-      const startRes = await apiStartEnroll(username, role);
-      sessionId = startRes?.session_id || null;
-      setProgress(0, startRes?.target || 15);
-      setAngleStatus(startRes?.required_angle || "center", {
-        center: 0,
-        left: 0,
-        right: 0,
-      });
-
-      isCapturing = true;
-      if (btnStartEnroll) btnStartEnroll.disabled = true;
-      if (btnStopEnroll) btnStopEnroll.disabled = false;
-
-      setStatus("Enrollment started. Collecting samples...");
-
-      captureTimer = setInterval(async () => {
-        if (!isCapturing || frameInFlight) return;
-
-        const faceB64 = captureFrameBase64(videoEl, canvasEl);
-        if (!faceB64) return;
-
-        frameInFlight = true;
-
-        try {
-          const r = await apiPushFrame(sessionId, faceB64);
-
-          if (r?.accepted) {
-            setProgress(r.count ?? acceptedSamples, r.target ?? targetSamples);
-            setAngleStatus(r?.required_angle || "center", r?.angle_counts);
-          } else if (r?.reason) {
-            setStatus(`Collecting... (${r.reason})`);
-            setAngleStatus(r?.required_angle || "center", r?.angle_counts);
-          }
-
-          const reached =
-            r?.reason === "TARGET_REACHED" ||
-            ((r?.count ?? 0) >= (r?.target ?? targetSamples) &&
-              (r?.target ?? targetSamples) > 0);
-
-          if (reached) {
-            setStatus("Target reached. Saving...");
-            await stopEnrollmentFlow(true);
-          }
-        } catch (e) {
-          console.error(e);
-          setStatus(`Frame error: ${e.message || "UNKNOWN_ERROR"}`);
-        } finally {
-          frameInFlight = false;
-        }
-      }, 220);
-    } catch (e) {
-      console.error(e);
-      setStatus(`Start error: ${e.message || "UNKNOWN_ERROR"}`);
-      isCapturing = false;
-      if (btnStartEnroll) btnStartEnroll.disabled = false;
-      if (btnStopEnroll) btnStopEnroll.disabled = true;
-    }
-  });
-
-  btnStopEnroll?.addEventListener("click", async () => {
-    await stopEnrollmentFlow(false);
-  });
-
-  btnVoiceStart?.addEventListener("click", async () => {
-    const minRecordMs = 2200;
-    try {
-      if (voiceListening) return;
-      if (!voiceChallengeId) {
-        setVoiceStatus("Metin hazir degil. Lutfen tekrar deneyin.");
+      if (faceEnrollmentCompleted) {
+        setStatus("Face samples already collected.");
         return;
       }
-      if (voiceSamples.length >= VOICE_TARGET_SAMPLES) {
+
+      const hasCamera = !!videoEl?.srcObject;
+      if (!hasCamera) {
+        setStatus("Start camera first.");
+        return;
+      }
+
+      setStatus("Collecting face samples...");
+      if (btnStartEnroll) btnStartEnroll.disabled = true;
+
+      faceSamples = [];
+      updateFaceProgress();
+
+      for (let i = 0; i < FACE_TARGET_SAMPLES; i += 1) {
+        const faceB64 = captureFrameBase64(videoEl, canvasEl);
+
+        if (faceB64) {
+          faceSamples.push(faceB64);
+          updateFaceProgress();
+        }
+
+        await sleep(220);
+      }
+
+      if (faceSamples.length < FACE_TARGET_SAMPLES) {
+        setStatus(
+          `Not enough face samples collected (${faceSamples.length}/${FACE_TARGET_SAMPLES}). Please try again.`
+        );
+        if (btnStartEnroll) btnStartEnroll.disabled = false;
+        return;
+      }
+
+      faceEnrollmentCompleted = true;
+      setStatus(
+        `Face samples completed (${faceSamples.length}/${FACE_TARGET_SAMPLES}).`
+      );
+      updateStepButtons();
+
+      setTimeout(() => {
+        showVoiceStep();
+      }, 250);
+    } catch (e) {
+      console.error(e);
+      setStatus(`Face collection error: ${e.message || "UNKNOWN_ERROR"}`);
+      if (!biometricSubmitCompleted && btnStartEnroll) {
+        btnStartEnroll.disabled = false;
+      }
+    }
+  });
+
+  // ---------- Voice ----------
+  btnVoiceStart?.addEventListener("click", async () => {
+    const minRecordMs = 2200;
+
+    try {
+      if (voiceListening) return;
+
+      if (!faceEnrollmentCompleted) {
+        setVoiceStatus("Complete face enrollment first.");
+        return;
+      }
+
+      if (voiceEnrollmentCompleted) {
         setVoiceStatus(`Already collected ${VOICE_TARGET_SAMPLES} samples.`);
         return;
       }
 
-      voiceB64 = null;
-      const voiceRecordStartedAt = Date.now();
-      const promptText = (voiceChallengePromptEl?.textContent || "").trim();
-      const expectedPhrase = extractSpeakTarget(promptText);
-      if (btnVoiceStart) btnVoiceStart.disabled = true;
+      const promptText = getCurrentVoicePrompt();
+      if (!promptText) {
+        setVoiceStatus("No prompt available.");
+        return;
+      }
 
-      setVoiceStatus("Recording started. Metni okuyun; cumle algilaninca otomatik kaydedilecek.");
+      voiceListening = true;
+      updateStepButtons();
+
+      resetAudioPreview();
+      setText(voiceTranscriptPreviewEl, "Listening...");
+      setVoiceStatus("Recording started. Read the sentence clearly.");
+
+      const recordStartedAt = Date.now();
       await startVoiceRecording();
 
-      const speech = await recognizePhraseUntilMatch(expectedPhrase, {
+      const speech = await recognizePhraseUntilMatch(promptText, {
         lang: "tr-TR",
         timeoutMs: 11000,
       });
 
-      const elapsed = Date.now() - voiceRecordStartedAt;
+      const elapsed = Date.now() - recordStartedAt;
       if (elapsed < minRecordMs) {
         await sleep(minRecordMs - elapsed);
       }
 
       const { blob, b64 } = await stopVoiceRecordingToBase64();
-      voiceB64 = b64;
 
       if (audioPreview) {
         audioPreview.src = URL.createObjectURL(blob);
         audioPreview.classList.remove("hidden");
       }
 
-      setText(voiceTranscriptPreviewEl, speech?.transcript || expectedPhrase || "Recorded phrase.");
-      setVoiceStatus("Voice sample captured. Saving sample...");
-
-      if (voiceSamples.length >= VOICE_TARGET_SAMPLES) {
-        setVoiceStatus(`Already collected ${VOICE_TARGET_SAMPLES} samples.`);
-        if (btnVoiceStart) btnVoiceStart.disabled = true;
-        return;
-      }
+      setText(voiceTranscriptPreviewEl, speech?.transcript || promptText);
 
       voiceSamples.push({
-        voice_wav_b64: voiceB64,
-        challenge_id: voiceChallengeId,
-        challenge_answer_text: expectedPhrase,
+        voice_wav_b64: b64,
+        challenge_answer_text: promptText,
+        transcript_text: speech?.transcript || "",
       });
 
-      setVoiceStatus(`Sample ${voiceSamples.length}/${VOICE_TARGET_SAMPLES} saved.`);
       updateVoiceSampleProgress();
 
-      if (voiceSamples.length < VOICE_TARGET_SAMPLES) {
-        await loadVoiceChallenge();
-        setVoiceStatus(
-          `Sample ${voiceSamples.length}/${VOICE_TARGET_SAMPLES} saved. Sonraki cumle otomatik yüklendi.`
-        );
-        return;
-      }
-
-      if (btnVoiceStart) btnVoiceStart.disabled = true;
-      setText(
-        voiceChallengePromptEl,
-        `${VOICE_TARGET_SAMPLES} samples captured. Finalizing voice enrollment...`
-      );
-      setVoiceStatus(`Saving merged voice template from ${VOICE_TARGET_SAMPLES} samples...`);
-
-      const res = await apiEnrollVoiceBatch(username, role, voiceSamples);
-      console.log("[VOICE ENROLL STATUS]", res?.status, res?.reason || "");
-
-      const status = (res?.status || "").trim().toUpperCase();
-      if (status === "VOICE_ALREADY_REGISTERED_OTHER_USER") {
-        setVoiceStatus("❌ Bu ses zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
-        alert("❌ Bu ses zaten başka bir kullanıcıya ait. Kayıt tamamlanmadı.");
-        // Son sample'ı sil, kullanıcı tekrar denesin
-        voiceSamples.pop();
-        updateVoiceSampleProgress();
-        if (btnVoiceStart) btnVoiceStart.disabled = false;
-        return;
-      }
-
-      if (status === "FAILED") {
-        const detail = res?.detail ? ` (${JSON.stringify(res.detail)})` : "";
-        setVoiceStatus(`Voice enroll failed: ${res?.reason || "UNKNOWN_ERROR"}${detail}`);
-      } else {
-        setVoiceStatus(res?.status ? `Voice enrolled: ${res.status}` : "Voice enrolled.");
-      }
-
-      if (
-        status === "VOICE_ENROLLED" ||
-        status === "VOICE_UPDATED" ||
-        status === "VOICE_ALREADY_REGISTERED"
-      ) {
+      if (voiceSamples.length >= VOICE_TARGET_SAMPLES) {
         voiceEnrollmentCompleted = true;
-        updateStepButtons();
-        setVoiceStatus("Voice enrollment complete. Click 'Finish Enrollment' to complete.");
-        setText(
-          voiceSampleProgressEl,
-          `Saved ${VOICE_TARGET_SAMPLES}/${VOICE_TARGET_SAMPLES} samples. Voice enrollment completed.`
+        updateVoicePrompt();
+        setVoiceStatus(
+          `Voice samples completed (${voiceSamples.length}/${VOICE_TARGET_SAMPLES}).`
+        );
+      } else {
+        updateVoicePrompt();
+        setVoiceStatus(
+          `Sample ${voiceSamples.length}/${VOICE_TARGET_SAMPLES} saved.`
         );
       }
+
+      updateStepButtons();
     } catch (e) {
       console.error(e);
+
       try {
         await stopVoiceRecordingToBase64();
       } catch {}
 
       const errCode = String(e?.message || "").toUpperCase();
       if (errCode === "PHRASE_NOT_MATCHED" || errCode.startsWith("SPEECH_")) {
-        setVoiceStatus("Cumle tam algilanamadi. Metni net okuyup tekrar deneyin.");
+        setVoiceStatus("Sentence was not matched clearly. Please try again.");
       } else {
-        setVoiceStatus(`Voice enroll failed: ${e.message || "UNKNOWN_ERROR"}`);
+        setVoiceStatus(`Voice recording failed: ${e.message || "UNKNOWN_ERROR"}`);
       }
-      if (btnVoiceStart) btnVoiceStart.disabled = false;
     } finally {
       voiceListening = false;
+      updateStepButtons();
     }
   });
 
+  // ---------- Navigation ----------
   btnGoVoice?.addEventListener("click", () => {
     if (!faceEnrollmentCompleted) {
       setStatus("Complete face enrollment first.");
@@ -648,34 +531,86 @@ export function initEnroll() {
     showVoiceStep();
   });
 
-  btnBackToFace?.addEventListener("click", () => {
+  btnBackToFace?.addEventListener("click", async () => {
     if (voiceListening) {
-      stopVoiceRecordingToBase64().catch(() => {});
+      try {
+        await stopVoiceRecordingToBase64();
+      } catch {}
       voiceListening = false;
-      if (btnVoiceStart) btnVoiceStart.disabled = false;
     }
+
+    updateStepButtons();
     showFaceStep();
   });
 
-  btnGoComplete?.addEventListener("click", () => {
-    if (!voiceEnrollmentCompleted) {
-      setVoiceStatus("Complete voice enrollment first.");
-      return;
+  // ---------- Final submit ----------
+  btnGoComplete?.addEventListener("click", async () => {
+    try {
+      if (!faceEnrollmentCompleted) {
+        setStatus("Complete face enrollment first.");
+        return;
+      }
+
+      if (!voiceEnrollmentCompleted) {
+        setVoiceStatus("Complete voice enrollment first.");
+        return;
+      }
+
+      if (!faceSamples.length || faceSamples.length < FACE_TARGET_SAMPLES) {
+        setStatus("Face samples are missing.");
+        return;
+      }
+
+      if (!voiceSamples.length || voiceSamples.length < VOICE_TARGET_SAMPLES) {
+        setVoiceStatus("Voice samples are missing.");
+        return;
+      }
+
+      biometricSubmitCompleted = false;
+      updateStepButtons();
+
+      setStatus("Sending biometric enrollment...");
+      setVoiceStatus("Submitting biometric data...");
+
+      const response = await apiEnrollBiometric(
+        username,
+        role,
+        faceSamples,
+        voiceSamples
+      );
+
+      biometricSubmitCompleted = true;
+      updateStepButtons();
+
+      const successMessage =
+        response?.message || "Biometric enrollment completed successfully.";
+
+      setStatus(successMessage);
+      setVoiceStatus("Enrollment completed.");
+      showCompleteStep(successMessage);
+    } catch (e) {
+      console.error(e);
+      biometricSubmitCompleted = false;
+      updateStepButtons();
+
+      const msg = e?.message || "UNKNOWN_ERROR";
+      setStatus(`Enrollment failed: ${msg}`);
+      setVoiceStatus(`Enrollment failed: ${msg}`);
     }
-    showCompleteStep();
   });
 
-  setProgress(0, targetSamples);
-  setAngleStatus("center", { center: 0, left: 0, right: 0 });
+  // ---------- Init ----------
+  updateFaceProgress();
   updateVoiceSampleProgress();
+  updateVoicePrompt();
   setText(voiceTranscriptPreviewEl, "Waiting for phrase...");
   setStatus("Ready.");
   setVoiceStatus("Ready.");
 
-  if (btnStopEnroll) btnStopEnroll.disabled = true;
-
   faceEnrollmentCompleted = false;
   voiceEnrollmentCompleted = false;
+  biometricSubmitCompleted = false;
+
   updateStepButtons();
   showFaceStep();
 }

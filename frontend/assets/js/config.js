@@ -5,8 +5,6 @@ export const API_BASE = "http://127.0.0.1:8000";
 export const ENDPOINTS = {
   identify: "/identify",
   verify: "/auth/verify",
-  enrollFace: "/enroll/face",
-  enrollVoice: "/enroll/voice"
 };
 
 // voice recording
