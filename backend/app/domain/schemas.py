@@ -15,7 +15,7 @@ class VerifyRequest(BaseModel):
             return None
         if isinstance(v, str) and v.strip() == "":
             return None
-        return v
+        return None if v is None else v
 
     @model_validator(mode="after")
     def at_least_one_modality(self):
@@ -87,3 +87,23 @@ class LoginResponse(BaseModel):
     message: str
     username: str
     role: str
+
+
+class BiometricVoiceSample(BaseModel):
+    voice_wav_b64: str
+    transcript_text: Optional[str] = None
+
+
+class BiometricEnrollRequest(BaseModel):
+    username: str
+    role: str
+    face_frames_b64: list[str]
+    voice_samples: list[BiometricVoiceSample]
+
+
+class BiometricEnrollResponse(BaseModel):
+    success: bool
+    message: str
+    user_id: Optional[int] = None
+    face_status: Optional[str] = None
+    voice_status: Optional[str] = None
