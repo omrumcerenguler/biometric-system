@@ -39,7 +39,7 @@ class FaceProcessor:
         return len(faces)
 
     def extract_embedding(self, bgr_img: np.ndarray) -> np.ndarray:
-        embedding, _ = self.extract_embedding_and_pose(bgr_img)
+        embedding, nose_x_ratio, yaw, bbox_size, blur_score = self.extract_embedding_and_pose(bgr_img)
         return embedding
 
 
@@ -49,7 +49,6 @@ class FaceProcessor:
             embedding: np.ndarray
             nose_x_ratio: float | None
             yaw: float | None
-            pitch: float | None
             bbox_size: float | None (yüzün görüntüdeki oranı)
             blur_score: float | None (yüksekse net, düşükse bulanık)
         """
@@ -67,8 +66,8 @@ class FaceProcessor:
         embedding = face.embedding.astype(np.float32)
         nose_x_ratio = self._estimate_nose_x_ratio(face)
 
-        # Head pose (yaw, pitch) tahmini (landmarklardan basit yaklaşım)
-        yaw, pitch = self._estimate_head_pose(face)
+        # Head pose (yaw) tahmini (landmarklardan basit yaklaşım)
+        yaw = self._estimate_head_pose(face)
 
         # Bounding box oranı (yüzün görüntüdeki alanı)
         bbox_size = self._estimate_bbox_size(face, bgr_img)
@@ -76,31 +75,24 @@ class FaceProcessor:
         # Blur (bulanıklık) ölçümü
         blur_score = self._estimate_blur_score(bgr_img, face)
 
-        return embedding, nose_x_ratio, yaw, pitch, bbox_size, blur_score
+        return embedding, nose_x_ratio, yaw, bbox_size, blur_score
 
-    def _estimate_head_pose(self, face) -> tuple[float | None, float | None]:
+    def _estimate_head_pose(self, face) -> float | None:
         """
-        Basit head pose tahmini: yaw (sağa/sola dönüş), pitch (yukarı/aşağı eğim)
+        Basit head pose tahmini: yaw (sağa/sola dönüş)
         """
         kps = getattr(face, "kps", None)
         if kps is None or len(kps) < 5:
-            return None, None
+            return None
         pts = np.asarray(kps, dtype=np.float32)
         left_eye = pts[0]
         right_eye = pts[1]
         nose = pts[2]
-        left_mouth = pts[3]
-        right_mouth = pts[4]
         # Yaw: gözler arası yatay fark ile burun
         eye_dx = right_eye[0] - left_eye[0]
         nose_dx = nose[0] - (left_eye[0] + right_eye[0]) / 2
         yaw = nose_dx / (eye_dx + 1e-6)
-        # Pitch: gözler ile ağız ortası arasındaki dikey fark
-        eye_y = (left_eye[1] + right_eye[1]) / 2
-        mouth_y = (left_mouth[1] + right_mouth[1]) / 2
-        nose_y = nose[1]
-        pitch = (nose_y - eye_y) / (mouth_y - eye_y + 1e-6)
-        return float(yaw), float(pitch)
+        return float(yaw)
 
     def _estimate_bbox_size(self, face, bgr_img) -> float | None:
         bbox = getattr(face, "bbox", None)

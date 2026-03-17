@@ -117,6 +117,29 @@ export function initIdentify() {
   }
 
   function setFlowDebug(step, status, reason = "-", score = "-") {
+    if (typeof step === 'object' && step !== null) {
+        // Yeni debug detayları kutusu için
+        const debug = step;
+        if (flowDebugStepEl) setText(flowDebugStepEl, debug.debug_step || "-");
+        if (flowDebugStatusEl) setText(flowDebugStatusEl, debug.status || "-");
+        if (flowDebugReasonEl) setText(flowDebugReasonEl, debug.reason || "-");
+        if (flowDebugScoreEl) setText(flowDebugScoreEl, debug.score || "-");
+        // pitch kaldırıldı
+        if (byId('debugYaw')) setText(byId('debugYaw'), debug.yaw !== undefined ? debug.yaw : "-");
+        if (byId('debugBlur')) setText(byId('debugBlur'), debug.blur_score !== undefined ? debug.blur_score : "-");
+        if (byId('debugBBox')) setText(byId('debugBBox'), debug.bbox_size !== undefined ? debug.bbox_size : "-");
+        if (byId('debugNoseX')) setText(byId('debugNoseX'), debug.nose_x_ratio !== undefined ? debug.nose_x_ratio : "-");
+        flowDebugHistory.unshift(`${debug.debug_step || "-"} | ${debug.status || "-"} | ${debug.reason || "-"} | ${debug.score || "-"}`);
+        flowDebugHistory = flowDebugHistory.slice(0, 8);
+        if (flowDebugHistoryEl) {
+            flowDebugHistoryEl.innerHTML = flowDebugHistory.join("<br>");
+        }
+        console.log(
+            `[FLOW] step=${debug.debug_step || "-"} status=${debug.status || "-"} reason=${debug.reason || "-"} score=${debug.score || "-"}`
+        );
+        return;
+    }
+    // Eski kullanım için
     if (flowDebugStepEl) setText(flowDebugStepEl, step || "-");
     if (flowDebugStatusEl) setText(flowDebugStatusEl, status || "-");
     if (flowDebugReasonEl) setText(flowDebugReasonEl, reason || "-");
@@ -370,40 +393,37 @@ export function initIdentify() {
 
       if (!idRes?.identified) {
         identifiedUser = null;
+        // Debug flow kutusuna tüm debug alanlarını yazdır
+        setFlowDebug(idRes);
+
+        // Eski status mesajlarını koru
         const reason = (idRes?.reason || "").toUpperCase();
         if (reason === "EYES_CLOSED") {
           setFaceStatus("Eyes look closed. Please keep your eyes open and try again.");
-          setFlowDebug("face_front", "failed", "EYES_CLOSED");
           return;
         }
         if (reason === "NO_FACE_DETECTED") {
           setFaceStatus("Face not detected clearly. Please center your full face in frame.");
-          setFlowDebug("face_front", "failed", "NO_FACE_DETECTED");
           return;
         }
         if (reason === "MULTIPLE_FACES_DETECTED") {
           setFaceStatus("Multiple faces detected. Keep only one face in frame.");
-          setFlowDebug("face_front", "failed", "MULTIPLE_FACES_DETECTED");
           return;
         }
         if (reason === "FACE_NOT_FRONTAL") {
           setFaceStatus("Please look straight at the camera (frontal face required).");
-          setFlowDebug("face_front", "failed", "FACE_NOT_FRONTAL");
           return;
         }
         if (reason === "EYES_NOT_CLEAR") {
           setFaceStatus("Eye state is not clear. Keep your full face visible and eyes open.");
-          setFlowDebug("face_front", "failed", "EYES_NOT_CLEAR");
           return;
         }
         if (reason === "NO_MATCH") {
           setFaceStatus("Face not matched. Look straight at camera and try again.");
-          setFlowDebug("face_front", "failed", "NO_MATCH");
           return;
         }
 
         setFaceStatus("Identification failed. Please align your face and try again.");
-        setFlowDebug("face_front", "failed", reason || "IDENTIFY_FAILED");
         return;
       }
 

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     FEATURE_ENC_KEY_B64: str = ""  # base64 key for Fernet (set in .env)
 
     # Thresholds (tune later)
-    FACE_IDENTIFICATION_THRESHOLD: float = 0.80
+    FACE_IDENTIFICATION_THRESHOLD: float = 0.75
     FACE_LIVENESS_IDENTITY_THRESHOLD: float = 0.80
     FACE_POSE_IDENTITY_THRESHOLD: float = 0.70
     FACE_POSE_MIN_DELTA: float = 0.12

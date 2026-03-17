@@ -10,13 +10,22 @@
 <body data-page="identify">
   <div class="app-container">
 
-    <div class="card" id="flowDebugPanel" style="border:1px dashed #7fbef5; background:#d9efff; color:#1882d8; padding:10px 12px; margin-bottom:12px;">
-      <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Flow Debug</h3>
-      <p class="muted" style="margin:2px 0;">Step: <span id="flowDebugStep">-</span></p>
-      <p class="muted" style="margin:2px 0;">Status: <span id="flowDebugStatus">-</span></p>
-      <p class="muted" style="margin:2px 0;">Reason: <span id="flowDebugReason">-</span></p>
-      <p class="muted" style="margin:2px 0;">Score: <span id="flowDebugScore">-</span></p>
-      <div id="flowDebugHistory" class="muted" style="margin-top:8px; font-size:0.78rem; line-height:1.35; max-height:110px; overflow:auto;"></div>
+    <div style="display:flex; gap:18px; margin-bottom:12px;">
+      <div class="card" id="flowDebugPanel" style="border:1px dashed #7fbef5; background:#d9efff; color:#1882d8; padding:10px 12px; min-width:220px;">
+        <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Flow Debug</h3>
+        <p class="muted" style="margin:2px 0;">Step: <span id="flowDebugStep">-</span></p>
+        <p class="muted" style="margin:2px 0;">Status: <span id="flowDebugStatus">-</span></p>
+        <p class="muted" style="margin:2px 0;">Reason: <span id="flowDebugReason">-</span></p>
+        <p class="muted" style="margin:2px 0;">Score: <span id="flowDebugScore">-</span></p>
+        <div id="flowDebugHistory" class="muted" style="margin-top:8px; font-size:0.78rem; line-height:1.35; max-height:110px; overflow:auto;"></div>
+      </div>
+      <div class="card" id="flowDebugDetailsPanel" style="border:1px dashed #7fbef5; background:#f5faff; color:#1882d8; padding:10px 12px; min-width:220px;">
+        <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Debug Details</h3>
+        <p class="muted" style="margin:2px 0;">Yaw: <span id="debugYaw">-</span></p>
+        <p class="muted" style="margin:2px 0;">Blur: <span id="debugBlur">-</span></p>
+        <p class="muted" style="margin:2px 0;">BBox: <span id="debugBBox">-</span></p>
+        <p class="muted" style="margin:2px 0;">Nose X Ratio: <span id="debugNoseX">-</span></p>
+      </div>
     </div>
 
     <!-- STEP 1: FACE -->

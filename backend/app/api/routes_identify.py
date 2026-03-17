@@ -25,6 +25,11 @@ class IdentifyFaceResponse(BaseModel):
     username: Optional[str] = None
     similarity: float
     reason: str
+    yaw: Optional[float] = None
+    blur_score: Optional[float] = None
+    bbox_size: Optional[float] = None
+    nose_x_ratio: Optional[float] = None
+    debug_step: Optional[str] = None
 
 
 
@@ -209,7 +214,7 @@ async def identify_pose_check(req: PoseCheckRequest, session: AsyncSession = Dep
             "face_count": face_count,
         }
 
-    probe_face_vec, nose_x, yaw, pitch, bbox_size, blur_score = _auth_service.extract_face_embedding_and_pose(img)
+    probe_face_vec, nose_x, yaw, bbox_size, blur_score = _auth_service.extract_face_embedding_and_pose(img)
     if probe_face_vec is None:
         return {
             "passed": False,
@@ -245,7 +250,7 @@ async def identify_pose_check(req: PoseCheckRequest, session: AsyncSession = Dep
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"INVALID_REFERENCE_IMAGE: {e}")
 
-        _ref_face_vec, reference_nose_x, _ref_yaw, _ref_pitch, _ref_bbox_size, _ref_blur_score = _auth_service.extract_face_embedding_and_pose(ref_img)
+        _ref_face_vec, reference_nose_x, _ref_yaw, _ref_bbox_size, _ref_blur_score = _auth_service.extract_face_embedding_and_pose(ref_img)
         if reference_nose_x is None:
             return {
                 "passed": False,
@@ -381,7 +386,7 @@ async def identify_blink_check(req: BlinkCheckRequest, session: AsyncSession = D
     for raw in req.face_frames_b64:
         try:
             probe_img = b64_to_bgr_image(raw)
-            vec, _nose_x, _yaw, _pitch, _bbox_size, _blur_score = _auth_service.extract_face_embedding_and_pose(probe_img)
+            vec, _nose_x, _yaw, _bbox_size, _blur_score = _auth_service.extract_face_embedding_and_pose(probe_img)
             if vec is not None:
                 first_valid_face_vec = vec
                 break
@@ -482,7 +487,19 @@ async def identify(req: IdentifyRequest, session: AsyncSession = Depends(get_ses
             session=session,
             face_img=img,
         )
-        return result
+        # Debug alanlarını response'a ekle
+        return IdentifyFaceResponse(
+            identified=result.get("identified", False),
+            user_id=result.get("user_id"),
+            username=result.get("username"),
+            similarity=result.get("similarity", 0.0),
+            reason=result.get("reason", "UNKNOWN"),
+            yaw=result.get("yaw"),
+            blur_score=result.get("blur_score"),
+            bbox_size=result.get("bbox_size"),
+            nose_x_ratio=result.get("nose_x_ratio"),
+            debug_step=result.get("debug_step"),
+        )
     except ValueError as e:
         if str(e) == "FACE_NOT_DETECTED":
             raise HTTPException(status_code=400, detail="FACE_NOT_DETECTED")

@@ -85,7 +85,7 @@ async def enroll_biometric(
 
             # Önce pose-aware extraction varsa onu kullan
             if hasattr(_auth_service, "extract_face_embedding_and_pose"):
-                emb, nose_x_ratio = _auth_service.extract_face_embedding_and_pose(img)
+                emb, nose_x_ratio, yaw, bbox_size, blur_score = _auth_service.extract_face_embedding_and_pose(img)
                 detected_pose = _auth_service.bucket_pose_from_nose_ratio(nose_x_ratio)
                 if emb is None:
                     return BiometricEnrollResponse(

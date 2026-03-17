@@ -23,6 +23,13 @@ LEGACY_FACE_TEMPLATE_TYPE = "face_feature"
 
 
 class AuthenticationService:
+
+    def count_faces(self, face_img: np.ndarray) -> Optional[int]:
+        try:
+            return int(self.face.count_faces(face_img))
+        except Exception:
+            return None
+
     def __init__(self) -> None:
         self.face = FaceProcessor()
         self.eye_state = EyeStateDetector()
@@ -149,20 +156,20 @@ class AuthenticationService:
         """
         embedding, nose_x_ratio, yaw, pitch, bbox_size, blur_score
         """
+        """
+        embedding, nose_x_ratio, yaw, bbox_size, blur_score
+        """
         try:
             result = self.face.extract_embedding_and_pose(face_img)
-            if result is None or len(result) < 6:
-                return (None,) * 6
-            embedding, nose_x_ratio, yaw, pitch, bbox_size, blur_score = result
+            if result is None or len(result) < 5:
+                return (None,) * 5
+            embedding, nose_x_ratio, yaw, bbox_size, blur_score = result
             if embedding is None or np.asarray(embedding).size == 0:
-                return (None,) * 6
+                return (None,) * 5
             embedding = np.asarray(embedding, dtype=np.float32).reshape(-1)
-            return self._l2norm(embedding), nose_x_ratio, yaw, pitch, bbox_size, blur_score
+            return self._l2norm(embedding), nose_x_ratio, yaw, bbox_size, blur_score
         except Exception:
-            return (None,) * 6
-
-    def count_faces(self, face_img: np.ndarray) -> Optional[int]:
-        try:
+            return (None,) * 5
             return int(self.face.count_faces(face_img))
         except Exception:
             return None
@@ -571,75 +578,101 @@ class AuthenticationService:
     # =====================================================
 
     async def identify_face(self, session: AsyncSession, face_img: np.ndarray) -> dict:
+
+        # Debug değişkenleri
+        debug = {
+            "yaw": None,
+            "blur_score": None,
+            "bbox_size": None,
+            "nose_x_ratio": None,
+            "debug_step": None,
+        }
+
         # 1. Tek yüz var mı?
         face_count = self.count_faces(face_img)
         if face_count is not None and face_count > 1:
+            debug["debug_step"] = "multiple_faces"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "MULTIPLE_FACES_DETECTED",
+                **debug,
             }
 
         # 2. Embedding ve tüm pose/kalite çıktıları
-        query_vec, nose_x_ratio, yaw, pitch, bbox_size, blur_score = self.extract_face_embedding_and_pose(face_img)
+        query_vec, nose_x_ratio, yaw, bbox_size, blur_score = self.extract_face_embedding_and_pose(face_img)
+        debug.update({
+            "yaw": yaw,
+            "blur_score": blur_score,
+            "bbox_size": bbox_size,
+            "nose_x_ratio": nose_x_ratio,
+        })
         if query_vec is None:
+            debug["debug_step"] = "embedding_failed"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "NO_FACE_DETECTED",
+                **debug,
             }
 
-        # 3. Head pose: yaw ve pitch aralıkta mı?
-            if yaw is None or abs(yaw) > 0.25:  # gevşetildi: ~14 derece
-                return {
-                    "identified": False,
-                    "similarity": 0.0,
-                    "reason": "FACE_YAW_OUT_OF_RANGE",
-                }
-            if pitch is None or abs(pitch) > 0.25:  # gevşetildi: ~14 derece
-                return {
-                    "identified": False,
-                    "similarity": 0.0,
-                    "reason": "FACE_PITCH_OUT_OF_RANGE",
-                }
+        # 3. Head pose: yaw aralıkta mı?
+        if yaw is None or abs(yaw) > 0.25:  # gevşetildi: ~14 derece
+            debug["debug_step"] = "yaw_out_of_range"
+            return {
+                "identified": False,
+                "similarity": 0.0,
+                "reason": "FACE_YAW_OUT_OF_RANGE",
+                **debug,
+            }
 
         # 4. Nose_x_ratio ortada mı? (yardımcı)
         if nose_x_ratio is None or nose_x_ratio < 0.44 or nose_x_ratio > 0.56:
+            debug["debug_step"] = "not_frontal"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "FACE_NOT_FRONTAL",
+                **debug,
             }
 
         # 5. Gözler açık ve net mi?
         eyes_open, _eye_state = self.eye_state.are_eyes_open(face_img)
         if eyes_open is False:
+            debug["debug_step"] = "eyes_closed"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "EYES_CLOSED",
+                **debug,
             }
         if eyes_open is None:
+            debug["debug_step"] = "eyes_not_clear"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "EYES_NOT_CLEAR",
+                **debug,
             }
 
-        # 6. Yüz yeterince büyük mü?
-        if bbox_size is None or bbox_size < 0.07:  # örnek: %7'den küçükse çok uzak
+        # 6. Yüz yeterince büyük mü? (bbox_size yüksek olmalı, örneğin %4'ten küçükse çok uzak)
+        if bbox_size is None or bbox_size < 0.04:  # örnek: %4'ten küçükse çok uzak
+            debug["debug_step"] = "bbox_too_small"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "FACE_TOO_SMALL",
+                **debug,
             }
 
         # 7. Yüz net mi? (blur score yüksek olmalı)
         if blur_score is None or blur_score < 18.0:  # örnek eşik: 18
+            debug["debug_step"] = "face_blurry"
             return {
                 "identified": False,
                 "similarity": 0.0,
                 "reason": "FACE_BLURRY",
+                **debug,
             }
 
         # 8. Eşleşme
@@ -661,18 +694,22 @@ class AuthenticationService:
                 best_user = user
 
         if best_user and best_score >= self.identification_thr:
+            debug["debug_step"] = "matched"
             return {
                 "identified": True,
                 "user_id": best_user.user_id,
                 "username": best_user.username,
                 "similarity": float(best_score),
                 "reason": "IDENTIFIED",
+                **debug,
             }
 
+        debug["debug_step"] = "no_match"
         return {
             "identified": False,
             "similarity": float(max(best_score, 0.0)),
             "reason": "NO_MATCH",
+            **debug,
         }
 
     async def identify_user(self, session: AsyncSession, face_img: np.ndarray) -> dict:
