@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 from sqlalchemy import select
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -229,6 +230,7 @@ class AuthenticationService:
         pose_templates: dict[str, np.ndarray],
         n_samples_by_pose: dict[str, int],
     ) -> dict:
+        logging.warning("[ENROLL_FACE] fonksiyonuna girildi.")
         user = await self._get_user_by_username(session, username)
 
         if user is None:
@@ -259,8 +261,10 @@ class AuthenticationService:
                 other_vec = np.frombuffer(other_face.enc_feature_blob, dtype=np.float32)
                 other_vec = self._l2norm(other_vec)
                 sim = self._cosine(normalized_vec, other_vec)
+                logging.warning(f"[FACE_SIM] pose={pose}, user={other_user.username}, sim={sim:.4f}")
 
                 if sim >= 0.80:
+                    logging.warning(f"[FACE_MATCH] pose={pose}, user={other_user.username}, sim={sim:.4f} (eşik aşıldı)")
                     return {
                         "status": "FACE_ALREADY_REGISTERED_OTHER_USER",
                         "reason": f"This face is already registered to user: {other_user.username}",
