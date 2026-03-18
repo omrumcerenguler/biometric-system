@@ -118,24 +118,31 @@ export function initIdentify() {
 
   function setFlowDebug(step, status, reason = "-", score = "-") {
     if (typeof step === 'object' && step !== null) {
-        // Yeni debug detayları kutusu için
         const debug = step;
+        let similarityScore = debug.similarity !== undefined ? debug.similarity : debug.score;
         if (flowDebugStepEl) setText(flowDebugStepEl, debug.debug_step || "-");
         if (flowDebugStatusEl) setText(flowDebugStatusEl, debug.status || "-");
         if (flowDebugReasonEl) setText(flowDebugReasonEl, debug.reason || "-");
-        if (flowDebugScoreEl) setText(flowDebugScoreEl, debug.score || "-");
+        // Score alanı için: 0.0 ise de göster
+        if (flowDebugScoreEl) {
+            if (similarityScore !== undefined && similarityScore !== null) {
+                flowDebugScoreEl.textContent = similarityScore;
+            } else {
+                flowDebugScoreEl.textContent = "0.0";
+            }
+        }
         // pitch kaldırıldı
         if (byId('debugYaw')) setText(byId('debugYaw'), debug.yaw !== undefined ? debug.yaw : "-");
         if (byId('debugBlur')) setText(byId('debugBlur'), debug.blur_score !== undefined ? debug.blur_score : "-");
         if (byId('debugBBox')) setText(byId('debugBBox'), debug.bbox_size !== undefined ? debug.bbox_size : "-");
         if (byId('debugNoseX')) setText(byId('debugNoseX'), debug.nose_x_ratio !== undefined ? debug.nose_x_ratio : "-");
-        flowDebugHistory.unshift(`${debug.debug_step || "-"} | ${debug.status || "-"} | ${debug.reason || "-"} | ${debug.score || "-"}`);
+        flowDebugHistory.unshift(`${debug.debug_step || "-"} | ${debug.status || "-"} | ${debug.reason || "-"} | ${similarityScore !== undefined ? similarityScore : "0.0"}`);
         flowDebugHistory = flowDebugHistory.slice(0, 8);
         if (flowDebugHistoryEl) {
             flowDebugHistoryEl.innerHTML = flowDebugHistory.join("<br>");
         }
         console.log(
-            `[FLOW] step=${debug.debug_step || "-"} status=${debug.status || "-"} reason=${debug.reason || "-"} score=${debug.score || "-"}`
+            `[FLOW] step=${debug.debug_step || "-"} status=${debug.status || "-"} reason=${debug.reason || "-"} score=${similarityScore !== undefined ? similarityScore : "0.0"}`
         );
         return;
     }
