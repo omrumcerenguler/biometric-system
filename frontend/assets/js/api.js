@@ -1,3 +1,21 @@
+// -------------------------
+// PRECHECK (FACE & VOICE DUPLICATE)
+// ------------------------- 
+export function apiPrecheckFace(username, face_image_b64) {
+  return jsonFetch("/enroll/precheck/face", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, face_image_b64 }),
+  });
+}
+
+export function apiPrecheckVoice(username, voice_wav_b64) {
+  return jsonFetch("/enroll/precheck/voice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, voice_wav_b64 }),
+  });
+}
 import { API_BASE } from "./config.js";
 
 // küçük helper: URL birleştir (çift slash olmasın)
