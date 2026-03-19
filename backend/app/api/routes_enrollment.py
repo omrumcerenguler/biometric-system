@@ -30,7 +30,7 @@ _auth_service = AuthenticationService()
 
 REQUIRED_FACE_ANGLES = ("center", "left", "right")
 REQUIRED_FACE_SAMPLES_PER_ANGLE = 5
-REQUIRED_TOTAL_VOICE_SAMPLES = 5
+REQUIRED_TOTAL_VOICE_SAMPLES = 10
 
 
 async def _require_existing_user(session: AsyncSession, username: str) -> User:
@@ -249,7 +249,7 @@ async def enroll_biometric(
                         sim,
                     )
 
-                    if sim >= 0.80:
+                    if sim >= 0.70:
                         print(
                             f"[FACE_MATCH_BLOCKED] enrolling_user={user.username} "
                             f"matched_user={other_user.username} sim={sim:.4f}"

@@ -71,7 +71,7 @@ class AuthenticationService:
                 best_sim = sim
                 best_user = other_user.username
                 best_user_id = other_user.user_id
-            if sim >= 0.80:
+            if sim >= 0.70:
                 print(f"[PRECHECK_FACE_DUPLICATE] enrolling_user={user.username} matched_user={other_user.username} sim={sim:.4f}")
                 logger.warning(f"[PRECHECK_FACE_DUPLICATE] enrolling_user={user.username} matched_user={other_user.username} sim={sim:.4f}")
                 return {
@@ -128,7 +128,7 @@ class AuthenticationService:
                 best_sim = sim
                 best_user = other_user.username
                 best_user_id = other_user.user_id
-            if sim >= 0.80:
+            if sim >= 0.70:
                 print(f"[PRECHECK_VOICE_DUPLICATE] enrolling_user={user.username} matched_user={other_user.username} sim={sim:.4f}")
                 logger.warning(f"[PRECHECK_VOICE_DUPLICATE] enrolling_user={user.username} matched_user={other_user.username} sim={sim:.4f}")
                 return {
