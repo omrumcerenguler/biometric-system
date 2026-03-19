@@ -135,26 +135,7 @@ async def enroll_biometric(
 
     user = await _require_existing_user(session, username)
 
-    has_face = False
-    for face_type in [
-        "face_feature_center",
-        "face_feature_left",
-        "face_feature_right",
-        "face_feature",
-    ]:
-        existing = await _auth_service._get_biometric_row(session, user.user_id, face_type)
-        if existing:
-            has_face = True
-            break
 
-    if has_face:
-        return BiometricEnrollResponse(
-            success=False,
-            message="USER_ALREADY_HAS_FACE_DATA",
-            user_id=user.user_id,
-            face_status="already_exists",
-            voice_status="not_processed",
-        )
 
     face_status = "not_processed"
     voice_status = "not_processed"
@@ -212,61 +193,6 @@ async def enroll_biometric(
                         voice_status="not_processed",
                     )
 
-            # Legacy safety check: first submitted face sample against DB
-            if idx == 0:
-                face_types = [
-                    "face_feature_center",
-                    "face_feature_left",
-                    "face_feature_right",
-                    "face_feature",
-                ]
-                result_all = await session.execute(
-                    select(BiometricData, User)
-                    .join(User, BiometricData.user_id == User.user_id)
-                    .where(
-                        BiometricData.type.in_(face_types),
-                        BiometricData.user_id != user.user_id,
-                    )
-                )
-
-                for other_face, other_user in result_all.all():
-                    other_vec = np.frombuffer(other_face.enc_feature_blob, dtype=np.float32)
-                    other_vec = _normalize_vector(other_vec)
-                    probe_vec = _normalize_vector(np.asarray(emb, dtype=np.float32).reshape(-1))
-                    sim = float(
-                        np.dot(probe_vec, other_vec)
-                        / ((np.linalg.norm(probe_vec) + 1e-8) * (np.linalg.norm(other_vec) + 1e-8))
-                    )
-
-                    print(
-                        f"[FIRST_FACE_SAMPLE_SIM] enrolling_user={user.username} "
-                        f"db_user={other_user.username} sim={sim:.4f}"
-                    )
-                    logger.info(
-                        "[FIRST_FACE_SAMPLE_SIM] enrolling_user=%s db_user=%s sim=%.4f",
-                        user.username,
-                        other_user.username,
-                        sim,
-                    )
-
-                    if sim >= 0.70:
-                        print(
-                            f"[FACE_MATCH_BLOCKED] enrolling_user={user.username} "
-                            f"matched_user={other_user.username} sim={sim:.4f}"
-                        )
-                        logger.warning(
-                            "[FACE_MATCH_BLOCKED] enrolling_user=%s matched_user=%s sim=%.4f",
-                            user.username,
-                            other_user.username,
-                            sim,
-                        )
-                        return BiometricEnrollResponse(
-                            success=False,
-                            message=f"FACE_ALREADY_REGISTERED_OTHER_USER:username={other_user.username},similarity={sim:.4f}",
-                            user_id=other_user.user_id,
-                            face_status="failed",
-                            voice_status="not_processed",
-                        )
 
             angle_embeddings[angle].append(emb)
 
