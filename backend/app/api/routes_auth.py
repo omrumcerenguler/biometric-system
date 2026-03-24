@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_access_token
 from app.db.session import get_session
 from app.domain.schemas import (
     VerifyRequest,
@@ -37,10 +38,19 @@ async def login(
     if not result.get("success"):
         raise HTTPException(status_code=401, detail=result.get("message", "LOGIN_FAILED"))
 
+    access_token = create_access_token(
+        {
+            "sub": result["username"],
+            "role": result["role"],
+        }
+    )
+
     return LoginResponse(
         message=result["message"],
         username=result["username"],
         role=result["role"],
+        access_token=access_token,
+        token_type="bearer",
     )
 
 

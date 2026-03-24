@@ -24,4 +24,9 @@ class Settings(BaseSettings):
     VOICE_LIVENESS_THRESHOLD: float = 0.70
     FUSION_PASS_THRESHOLD: float = 0.70
 
+    # JWT Settings
+    SECRET_KEY: str = "dev-secret-key-change-this"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
 settings = Settings()

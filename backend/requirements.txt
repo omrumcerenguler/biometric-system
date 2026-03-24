@@ -13,6 +13,9 @@ aiosqlite==0.20.0
 # Security / encryption
 cryptography==43.0.1
 
+# JWT Auth
+python-jose[cryptography]==3.3.0
+
 # Computer Vision
 opencv-python==4.10.0.84
 mediapipe==0.10.14
