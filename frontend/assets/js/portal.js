@@ -1,3 +1,5 @@
+import { apiLogin } from "./api.js";
+
 // frontend/assets/js/portal.js
 
 window.portal = {
@@ -34,28 +36,8 @@ window.portal = {
       }
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/auth/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            username,
-            password,
-          }),
-        });
-
-        console.log("[PORTAL] response status:", response.status);
-
-        const data = await response.json();
+        const data = await apiLogin(username, password);
         console.log("[PORTAL] response data:", data);
-
-        if (!response.ok) {
-          if (loginMessage) {
-            loginMessage.textContent = data.detail || "Login failed.";
-          }
-          return;
-        }
 
         if (loginMessage) {
           loginMessage.textContent = "Login successful. Redirecting...";
@@ -71,7 +53,10 @@ window.portal = {
       } catch (error) {
         console.error("[PORTAL LOGIN ERROR]", error);
         if (loginMessage) {
-          loginMessage.textContent = "Could not connect to the server.";
+          loginMessage.textContent =
+            error.message === "NETWORK_ERROR"
+              ? "Could not connect to the server."
+              : error.message || "Login failed.";
         }
       }
     }
