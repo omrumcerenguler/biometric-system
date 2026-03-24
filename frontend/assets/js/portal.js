@@ -46,6 +46,7 @@ window.portal = {
         localStorage.setItem("portalUsername", data.username);
         localStorage.setItem("portalRole", data.role);
         localStorage.setItem("portalLoggedIn", "true");
+        localStorage.setItem("accessToken", data.access_token);
 
         setTimeout(() => {
           window.location.href = "../portal/dashboard_portal.html";

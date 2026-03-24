@@ -29,8 +29,24 @@ async function jsonFetch(path, options = {}) {
   const url = joinUrl(API_BASE, path);
 
   let res;
+
+  // 🔐 localStorage'dan token al
+  const token = localStorage.getItem("accessToken");
+
+  // mevcut headerları koru + Authorization ekle
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   try {
-    res = await fetch(url, options);
+    res = await fetch(url, {
+      ...options,
+      headers,
+    });
   } catch (e) {
     throw new Error("NETWORK_ERROR");
   }
@@ -50,6 +66,7 @@ async function jsonFetch(path, options = {}) {
 
   return data;
 }
+
 
 // -------------------------
 // ENROLL (BIOMETRIC - unified)
