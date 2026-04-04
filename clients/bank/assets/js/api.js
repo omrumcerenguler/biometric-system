@@ -35,6 +35,7 @@ async function jsonFetch(path, options = {}) {
 
   // mevcut headerları koru + Authorization ekle
   const headers = {
+    "X-Client": "bank",
     ...(options.headers || {}),
   };
 
@@ -158,13 +159,7 @@ export function apiIdentifyBlinkCheck(
 // -------------------------
 // IDENTIFY (1:1) - Voice
 // -------------------------
-export function apiIdentifyVoice(voice_b64, expected_user_id) {
-  return jsonFetch("/identify/voice", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ voice_b64, expected_user_id }),
-  });
-}
+
 
 // -------------------------
 // AUTH VERIFY (Face + Voice)

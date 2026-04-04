@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
@@ -28,11 +28,13 @@ def _bad_request(msg: str) -> None:
 async def login(
     req: LoginRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ) -> LoginResponse:
     result = await _auth_service.login_user(
         session=session,
         username=req.username,
         password=req.password,
+        client=x_client,
     )
 
     if not result.get("success"):
@@ -58,6 +60,7 @@ async def login(
 async def verify(
     req: VerifyRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ) -> VerifyResponse:
     """
     Product logic:
@@ -86,6 +89,7 @@ async def verify(
         face_img=face_img,
         audio=audio,
         sr=sr,
+        client=x_client,
     )
 
     result.setdefault("decision", "DENIED")

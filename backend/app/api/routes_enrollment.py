@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import logging
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,8 +33,8 @@ REQUIRED_FACE_SAMPLES_PER_ANGLE = 5
 REQUIRED_TOTAL_VOICE_SAMPLES = 10
 
 
-async def _require_existing_user(session: AsyncSession, username: str) -> User:
-    result = await session.execute(select(User).where(User.username == username))
+async def _require_existing_user(session: AsyncSession, username: str, client: str = "portal") -> User:
+    result = await session.execute(select(User).where(User.username == username, User.client == client))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
@@ -49,12 +49,13 @@ def _normalize_vector(vec: np.ndarray) -> np.ndarray:
 async def precheck_face_duplicate(
     req: FacePrecheckRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ):
     username = (req.username or "").strip()
     if not username:
         raise HTTPException(status_code=400, detail="USERNAME_EMPTY")
 
-    await _require_existing_user(session, username)
+    await _require_existing_user(session, username, x_client)
 
     try:
         img = b64_to_bgr_image(req.face_image_b64)
@@ -76,7 +77,7 @@ async def precheck_face_duplicate(
         )
 
     emb = _normalize_vector(np.asarray(emb, dtype=np.float32).reshape(-1))
-    result = await _auth_service.precheck_face_duplicate(session, username, emb)
+    result = await _auth_service.precheck_face_duplicate(session, username, emb, x_client)
     return FacePrecheckResponse(**result)
 
 
@@ -84,12 +85,13 @@ async def precheck_face_duplicate(
 async def precheck_voice_duplicate(
     req: VoicePrecheckRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client")
 ):
     username = (req.username or "").strip()
     if not username:
         raise HTTPException(status_code=400, detail="USERNAME_EMPTY")
 
-    await _require_existing_user(session, username)
+    await _require_existing_user(session, username,x_client)
 
     try:
         audio, sr = b64_to_wav_mono(req.voice_wav_b64)
@@ -107,7 +109,7 @@ async def precheck_voice_duplicate(
         )
 
     emb = _normalize_vector(np.asarray(emb, dtype=np.float32).reshape(-1))
-    result = await _auth_service.precheck_voice_duplicate(session, username, emb)
+    result = await _auth_service.precheck_voice_duplicate(session, username, emb,x_client)
     return VoicePrecheckResponse(**result)
 
 
@@ -115,6 +117,7 @@ async def precheck_voice_duplicate(
 async def enroll_biometric(
     req: BiometricEnrollRequest,
     session: AsyncSession = Depends(get_session),
+     x_client: str = Header(default="portal", alias="X-Client"),
 ):
     username = (req.username or "").strip()
     role = (req.role or "").strip()
@@ -133,7 +136,7 @@ async def enroll_biometric(
     if not voice_samples:
         return BiometricEnrollResponse(success=False, message="VOICE_SAMPLES_EMPTY")
 
-    user = await _require_existing_user(session, username)
+    user = await _require_existing_user(session, username, x_client)
 
 
 
@@ -314,6 +317,7 @@ async def enroll_biometric(
                     "left": len(angle_embeddings["left"]),
                     "right": len(angle_embeddings["right"]),
                 },
+                client=x_client,
             )
 
             if face_result.get("reason") == "USER_NOT_FOUND":
@@ -344,6 +348,7 @@ async def enroll_biometric(
                 session=session,
                 username=username,
                 voice_vec=merged_voice_template,
+                client=x_client,
             )
 
             if voice_result.get("reason") == "USER_NOT_FOUND":

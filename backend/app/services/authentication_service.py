@@ -35,11 +35,12 @@ class AuthenticationService:
         session: AsyncSession,
         username: str,
         face_vec: np.ndarray,
+        client: str = "portal",
     ) -> dict:
         """
         Sadece duplicate kontrolü yapar, DB'ye kayıt yapmaz.
         """
-        user = await self._get_user_by_username(session, username)
+        user = await self._get_user_by_username(session, username, client)
         if user is None:
             return {
                 "duplicate": False,
@@ -61,6 +62,7 @@ class AuthenticationService:
             .where(
                 BiometricData.type.in_(FACE_TYPES),
                 BiometricData.user_id != user.user_id,
+                User.client == client,
             )
         )
         best_sim = 0.0
@@ -98,11 +100,12 @@ class AuthenticationService:
         session: AsyncSession,
         username: str,
         voice_vec: np.ndarray,
+        client: str = "portal",
     ) -> dict:
         """
         Sadece duplicate kontrolü yapar, DB'ye kayıt yapmaz.
         """
-        user = await self._get_user_by_username(session, username)
+        user = await self._get_user_by_username(session, username, client)
         if user is None:
             return {
                 "duplicate": False,
@@ -118,6 +121,7 @@ class AuthenticationService:
             .where(
                 BiometricData.type == "voice_feature",
                 BiometricData.user_id != user.user_id,
+                User.client == client,
             )
         )
         best_sim = 0.0
@@ -198,14 +202,22 @@ class AuthenticationService:
         if nose_x_ratio > 0.56:
             return "right"
         return "center"
+    
 
     async def _get_user_by_username(
         self,
         session: AsyncSession,
         username: str,
+        client: str = "portal",  # default önemli
     ) -> Optional[User]:
-        result = await session.execute(select(User).where(User.username == username))
+        result = await session.execute(
+            select(User).where(
+                User.username == username,
+                User.client == client
+            )
+        )
         return result.scalar_one_or_none()
+
 
     async def _get_biometric_row(
         self,
@@ -230,8 +242,9 @@ class AuthenticationService:
         session: AsyncSession,
         username: str,
         password: str,
+        client: str = "portal",
     ) -> dict:
-        user = await self._get_user_by_username(session, username)
+        user = await self._get_user_by_username(session, username, client)
 
         if user is None:
             return {
@@ -362,11 +375,12 @@ class AuthenticationService:
         role: str,
         pose_templates: dict[str, np.ndarray],
         n_samples_by_pose: dict[str, int],
+        client: str = "portal",
     ) -> dict:
         print(f"[ENROLL_START] username={username}")
         logger.info("[ENROLL_START] username=%s", username)
 
-        user = await self._get_user_by_username(session, username)
+        user = await self._get_user_by_username(session, username,client)
         if user is None:
             return {"status": "FAILED", "reason": "USER_NOT_FOUND"}
 
@@ -387,6 +401,7 @@ class AuthenticationService:
                 .where(
                     BiometricData.type.in_(bio_types),
                     BiometricData.user_id != user.user_id,
+                    User.client == client,
                 )
             )
 
@@ -475,6 +490,7 @@ class AuthenticationService:
         role: str,
         audio: np.ndarray,
         sr: int,
+        client: str = "portal",
     ) -> dict:
         v = self.extract_voice_embedding(audio, sr)
         if v is None:
@@ -484,6 +500,7 @@ class AuthenticationService:
             session=session,
             username=username,
             voice_vec=v,
+            client=client,
         )
 
     async def save_voice_template_vector(
@@ -492,8 +509,9 @@ class AuthenticationService:
         username: str,
         voice_vec: np.ndarray,
         allow_low_similarity_update: bool = False,
+        client: str = "portal",
     ) -> dict:
-        user = await self._get_user_by_username(session, username)
+        user = await self._get_user_by_username(session, username, client)
 
         if user is None:
             return {"status": "FAILED", "reason": "USER_NOT_FOUND"}
@@ -510,6 +528,7 @@ class AuthenticationService:
             .where(
                 BiometricData.type == "voice_feature",
                 BiometricData.user_id != user.user_id,
+                User.client == client,
             )
         )
 
@@ -658,7 +677,7 @@ class AuthenticationService:
     # Identification (1:N) - FACE
     # =====================================================
 
-    async def identify_face(self, session: AsyncSession, face_img: np.ndarray) -> dict:
+    async def identify_face(self, session: AsyncSession, face_img: np.ndarray, client: str = "portal") -> dict:
         debug = {
             "yaw": None,
             "blur_score": None,
@@ -751,7 +770,7 @@ class AuthenticationService:
         best_score = -1.0
         best_user = None
 
-        user_result = await session.execute(select(User))
+        user_result = await session.execute(select(User).where(User.client == client))
         for user in user_result.scalars().all():
             db_vec = await self._get_best_face_template_for_identification(
                 session=session,
@@ -784,8 +803,8 @@ class AuthenticationService:
             **debug,
         }
 
-    async def identify_user(self, session: AsyncSession, face_img: np.ndarray) -> dict:
-        return await self.identify_face(session=session, face_img=face_img)
+    async def identify_user(self, session: AsyncSession, face_img: np.ndarray, client: str = "portal") -> dict:
+        return await self.identify_face(session=session, face_img=face_img,client=client)
 
     # =====================================================
     # Verify (Fusion) - FACE + VOICE
@@ -797,6 +816,7 @@ class AuthenticationService:
         face_img: Optional[np.ndarray],
         audio: Optional[np.ndarray],
         sr: Optional[int],
+        client: str = "portal",
     ) -> dict:
         if face_img is None:
             return {
@@ -808,7 +828,7 @@ class AuthenticationService:
                 "voice_score": 0.0,
             }
 
-        id_result = await self.identify_face(session, face_img)
+        id_result = await self.identify_face(session, face_img, client)
         face_score = float(id_result.get("similarity", 0.0))
 
         if not id_result.get("identified"):

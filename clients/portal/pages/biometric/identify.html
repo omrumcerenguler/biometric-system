@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Identify | Biometric Module</title>
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+</head>
+
+<body data-page="identify">
+  <div class="app-container">
+
+    <div style="display:flex; gap:18px; margin-bottom:12px; flex-wrap:wrap;">
+      <div
+        class="card"
+        id="flowDebugPanel"
+        style="border:1px dashed #7fbef5; background:#d9efff; color:#1882d8; padding:10px 12px; min-width:220px;"
+      >
+        <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Flow Debug</h3>
+        <p class="muted" style="margin:2px 0;">Step: <span id="flowDebugStep">-</span></p>
+        <p class="muted" style="margin:2px 0;">Status: <span id="flowDebugStatus">-</span></p>
+        <p class="muted" style="margin:2px 0;">Reason: <span id="flowDebugReason">-</span></p>
+        <p class="muted" style="margin:2px 0;">Score: <span id="flowDebugScore">-</span></p>
+        <div
+          id="flowDebugHistory"
+          class="muted"
+          style="margin-top:8px; font-size:0.78rem; line-height:1.35; max-height:110px; overflow:auto;"
+        ></div>
+      </div>
+
+      <div
+        class="card"
+        id="flowDebugDetailsPanel"
+        style="border:1px dashed #7fbef5; background:#f5faff; color:#1882d8; padding:10px 12px; min-width:220px;"
+      >
+        <h3 style="margin:0 0 8px 0; font-size:0.95rem;">Debug Details</h3>
+        <p class="muted" style="margin:2px 0;">Yaw: <span id="debugYaw">-</span></p>
+        <p class="muted" style="margin:2px 0;">Blur: <span id="debugBlur">-</span></p>
+        <p class="muted" style="margin:2px 0;">BBox: <span id="debugBBox">-</span></p>
+        <p class="muted" style="margin:2px 0;">Nose X Ratio: <span id="debugNoseX">-</span></p>
+      </div>
+    </div>
+
+    <!-- STEP 1: FACE -->
+    <div class="card" id="step-face">
+      <h2>Face Identification</h2>
+      <p>Please look directly at the camera.</p>
+
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" class="hidden"></canvas>
+
+      <button class="btn" id="btnCamStart" type="button">Start Camera</button>
+      <button class="btn" id="btnFaceCapture" type="button">Capture Face</button>
+      <a
+        class="btn"
+        id="btnBack"
+        href="../portal/login_portal.html"
+        style="display:inline-block; text-decoration:none; text-align:center;"
+      >Back</a>
+
+      <p id="faceStatus" class="muted" style="margin-top:10px;"></p>
+    </div>
+
+    <!-- STEP 2: LIVENESS -->
+    <div class="card hidden" id="step-liveness">
+      <p
+        id="identifiedUserBanner"
+        style="display:none; background:#1e3a5f; color:#7ecfff; border:1px solid #3a6ea5; border-radius:6px; padding:7px 14px; margin-bottom:12px; font-size:0.9rem; text-align:center;"
+      >
+        🔍 Identified as: <strong id="identifiedUserName"></strong>
+      </p>
+
+      <h2>Voice and Liveness Check</h2>
+      <p id="identifyChallengePrompt">Challenge sentence loading...</p>
+
+      <video id="livenessVideo" autoplay playsinline class="camera-frame"></video>
+
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn" id="btnCaptureChallengeAnswer" type="button">Read the Sentence</button>
+        <button class="btn" id="btnRefreshIdentifyChallenge" type="button">New Challenge</button>
+      </div>
+
+      <input
+        id="identifyChallengeAnswer"
+        class="auth-input"
+        type="text"
+        placeholder="Transcript preview"
+        autocomplete="off"
+      />
+
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn" id="btnCheckTurnRight" type="button">Check RIGHT turn</button>
+        <button class="btn" id="btnCheckTurnLeft" type="button">Check LEFT turn</button>
+        <button class="btn" id="btnCheckBlink" type="button">Check BLINK</button>
+      </div>
+
+      <p id="livenessStatus" class="muted" style="margin-top:10px;"></p>
+
+      <!-- Voice verify score box (shown on failure) -->
+      <div
+        id="voiceVerifyScoreBox"
+        style="display:none; background:#1a2e45; border:1px solid #3a6ea5; border-radius:6px; padding:9px 14px; margin-top:10px; font-size:0.87rem; line-height:1.7;"
+      >
+        <p style="margin:0; color:#f0a500; font-weight:600;">&#x26A0; Voice Verification Failed</p>
+        <p style="margin:2px 0; color:#aac8e8;">Face score: <strong id="vvFaceScore">-</strong></p>
+        <p style="margin:2px 0; color:#aac8e8;">
+          Voice score: <strong id="vvVoiceScore">-</strong>
+          &nbsp;/&nbsp;
+          <span style="color:#f0a500;">threshold: 0.88</span>
+        </p>
+        <p style="margin:2px 0; color:#aac8e8;">Fusion score: <strong id="vvFusionScore">-</strong></p>
+        <p style="margin:2px 0; color:#aac8e8;">Reason: <strong id="vvReason">-</strong></p>
+      </div>
+
+      <button class="btn" id="btnLivenessContinue" type="button" disabled>Complete Verification</button>
+    </div>
+
+    <!-- STEP 3: RESULT -->
+    <div class="card hidden" id="step-result">
+      <h2>Result</h2>
+
+      <p id="result-decision"></p>
+
+      <div class="score-box">
+        <p>Face Score: <span id="face-score">-</span></p>
+        <p>Voice Score: <span id="voice-score">-</span></p>
+        <p>Overall Score: <span id="fusion-score">-</span></p>
+        <p>Spoof Decision: <span id="spoof-decision">-</span></p>
+        <p>Spoof Score: <span id="spoof-score">-</span></p>
+      </div>
+
+      <p id="statusText" class="muted" style="margin-top:10px;"></p>
+      <button class="btn" id="btnRestartResult" type="button">Restart</button>
+    </div>
+
+  </div>
+
+  <script type="module" src="../../assets/js/index.js?v=20260314-liveness-preview"></script>
+</body>
+</html>

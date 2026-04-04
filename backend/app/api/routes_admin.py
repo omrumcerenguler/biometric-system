@@ -19,7 +19,7 @@ async def create_user(
     current_user: User = Depends(require_admin),
 ) -> CreateUserResponse:
     existing_result = await session.execute(
-        select(User).where(User.username == req.username)
+        select(User).where(User.username == req.username,User.client == req.client)
     )
     existing_user = existing_result.scalar_one_or_none()
 
@@ -30,6 +30,7 @@ async def create_user(
         username=req.username,
         password_hash=req.password,
         role=req.role,
+        client=req.client,
         is_active=True,
     )
 

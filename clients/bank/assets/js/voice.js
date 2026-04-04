@@ -1,13 +1,3 @@
-import { apiIdentifyVoice } from "./api.js";
-
-// Optional helper for direct 1:1 voice identification
-export async function recordAndIdentifyVoice(expected_user_id, recordMs = 3000) {
-  await startVoiceRecording();
-  await new Promise((resolve) => setTimeout(resolve, recordMs));
-  const { b64 } = await stopVoiceRecordingToBase64();
-  const result = await apiIdentifyVoice(b64, expected_user_id);
-  return result;
-}
 
 let audioContext = null;
 let mediaStream = null;

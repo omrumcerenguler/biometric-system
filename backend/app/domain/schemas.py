@@ -38,6 +38,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+    client: str = "portal"
 
     @field_validator("username", "password", "role", mode="before")
     @classmethod

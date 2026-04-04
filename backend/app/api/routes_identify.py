@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,11 +31,6 @@ class IdentifyFaceResponse(BaseModel):
     bbox_size: Optional[float] = None
     nose_x_ratio: Optional[float] = None
     debug_step: Optional[str] = None
-
-
-class VoiceIdentifyRequest(BaseModel):
-    voice_b64: str
-    expected_user_id: int
 
 
 class VoiceIdentifyResponse(BaseModel):
@@ -69,7 +64,7 @@ class PoseCheckRequest(BaseModel):
     face_image_b64: str
     required_turn: str
     reference_face_image_b64: Optional[str] = None
-    expected_user_id: int
+    expected_user_id: Optional[int] = None
     require_eyes_open: bool = True
 
 
@@ -199,25 +194,6 @@ def _bucket_nose_ratio(nose_x_ratio: float | None) -> str | None:
     return "center"
 
 
-@router.post("/voice", response_model=VoiceIdentifyResponse)
-async def identify_voice(
-    req: VoiceIdentifyRequest,
-    session: AsyncSession = Depends(get_session),
-):
-    try:
-        audio, sr = b64_to_wav_mono(req.voice_b64)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"INVALID_AUDIO: {e}")
-
-    result = await _auth_service.identify_user_by_voice(
-        session=session,
-        audio=audio,
-        sr=sr,
-        expected_user_id=req.expected_user_id,
-    )
-    return result
-
-
 @router.get("/voice-challenge", response_model=VoiceChallengeResponse)
 async def get_identify_voice_challenge():
     challenge = generate_voice_challenge()
@@ -262,6 +238,7 @@ async def validate_identify_voice_challenge(req: VoiceChallengeValidateRequest):
 async def identify_pose_check(
     req: PoseCheckRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ):
     required = (req.required_turn or "").strip().lower()
     if required not in {"center", "left", "right"}:
@@ -397,38 +374,39 @@ async def identify_pose_check(
             "left_abs_max": left_abs_max,
         }
 
-    expected_face_vec = await _auth_service._get_user_face_template(
-        session=session,
-        user_id=int(req.expected_user_id),
-        pose=required,
-    )
-    if expected_face_vec is None:
-        return {
-            "passed": False,
-            "required_turn": required,
-            "detected_turn": detected,
-            "reason": "EXPECTED_USER_POSE_TEMPLATE_MISSING",
-            "similarity": similarity,
-            "reference_similarity": None,
-            "reference_nose_x": reference_nose_x,
-            "nose_x": nose_x,
-            "pose_min_delta": pose_min_delta,
-        }
+    if req.expected_user_id is not None:
+        expected_face_vec = await _auth_service._get_user_face_template(
+            session=session,
+            user_id=int(req.expected_user_id),
+            pose=required,
+        )
+        if expected_face_vec is None:
+            return {
+                "passed": False,
+                "required_turn": required,
+                "detected_turn": detected,
+                "reason": "EXPECTED_USER_POSE_TEMPLATE_MISSING",
+                "similarity": similarity,
+                "reference_similarity": None,
+                "reference_nose_x": reference_nose_x,
+                "nose_x": nose_x,
+                "pose_min_delta": pose_min_delta,
+         }
 
-    template_similarity = float(_auth_service._cosine(probe_face_vec, expected_face_vec))
-    if template_similarity < pose_identity_thr:
-        return {
-            "passed": False,
-            "required_turn": required,
-            "detected_turn": detected,
-            "reason": "FACE_MISMATCH",
-            "similarity": template_similarity,
-            "reference_similarity": None,
-            "threshold": pose_identity_thr,
-            "reference_nose_x": reference_nose_x,
-            "nose_x": nose_x,
-            "pose_min_delta": pose_min_delta,
-        }
+        template_similarity = float(_auth_service._cosine(probe_face_vec, expected_face_vec))
+        if template_similarity < pose_identity_thr:
+            return {
+                "passed": False,
+                "required_turn": required,
+                "detected_turn": detected,
+                "reason": "FACE_MISMATCH",
+                "similarity": template_similarity,
+                "reference_similarity": None,
+                "threshold": pose_identity_thr,
+                "reference_nose_x": reference_nose_x,
+                "nose_x": nose_x,
+                "pose_min_delta": pose_min_delta,
+            }
 
     return {
         "passed": True,
@@ -446,6 +424,7 @@ async def identify_pose_check(
 async def identify_blink_check(
     req: BlinkCheckRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ):
     if not req.face_frames_b64 or len(req.face_frames_b64) < 6:
         raise HTTPException(status_code=400, detail="BLINK_FRAMES_MIN_6")
@@ -547,6 +526,7 @@ async def identify_blink_check(
 async def identify(
     req: IdentifyRequest,
     session: AsyncSession = Depends(get_session),
+    x_client: str = Header(default="portal", alias="X-Client"),
 ):
     try:
         img = b64_to_bgr_image(req.face_image_b64)
@@ -557,6 +537,7 @@ async def identify(
         result = await _auth_service.identify_user(
             session=session,
             face_img=img,
+            client=x_client
         )
         return IdentifyFaceResponse(
             identified=result.get("identified", False),

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Enroll | Biometric System</title>
+    <link rel="stylesheet" href="../../assets/css/style.css" />
+  </head>
+
+  <body data-page="enroll">
+    <div class="app-container enroll-shell">
+      <!-- HERO -->
+      <div class="card enroll-hero">
+        <div class="section-head">
+          <div>
+            <h2>Biometric Enrollment</h2>
+            <p class="section-copy">
+              Complete your face and voice enrollment to activate biometric authentication for your portal account.
+            </p>
+          </div>
+
+          <a class="back-link" href="../portal/dashboard_portal.html">
+            Back to Dashboard
+          </a>
+        </div>
+
+        <p class="session-text">
+          Enrolling account: <strong id="enrollUser">-</strong>
+        </p>
+      </div>
+
+      <!-- SINGLE STEP CARD -->
+      <div class="card enroll-main-card enroll-step-card">
+        <div class="enroll-step-header">
+          <p id="stepIndicator" class="step-indicator">Step 1 of 2</p>
+          <h2 id="stepTitle">Face Enrollment</h2>
+          <p id="stepDescription" class="section-copy">
+            Start the camera, then begin enrollment. The system will collect multiple face samples automatically.
+          </p>
+        </div>
+
+        <!-- STEP 1: FACE -->
+        <div id="faceStep">
+          <video
+            id="camVideo"
+            autoplay
+            playsinline
+            class="camera-frame"
+          ></video>
+          <canvas id="camCanvas" class="hidden"></canvas>
+
+          <div class="button-row compact-actions">
+            <button class="btn" id="btnStartCam" type="button">Start Camera</button>
+            <button class="btn" id="btnStopCam" type="button">Stop Camera</button>
+          </div>
+
+          <div class="progress-shell">
+            <div class="progress-head">
+              <span class="progress-label">Progress:</span>
+              <span id="progressText" class="progress-value">0/15</span>
+            </div>
+
+            <div class="progress-track">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+          </div>
+
+          <p id="angleStatus" class="status-line">Required angle: center</p>
+          <div
+            id="angleGuide"
+            style="margin-top:8px; background:#0f172a; color:#f8fafc; border-radius:10px; padding:14px 16px; font-size:1rem; font-weight:700; text-align:center;"
+          >
+            Turn your HEAD as instructed below.
+          </div>
+
+          <p id="statusText" class="status-line">Ready.</p>
+
+          <div class="button-row compact-actions">
+            <button class="btn" id="btnStartEnroll" type="button">Start Enrollment</button>
+            <button class="btn" id="btnStopEnroll" type="button">Stop</button>
+          </div>
+
+          <div class="button-row compact-actions">
+            <button class="btn" id="btnGoVoice" type="button">Continue to Voice</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: VOICE -->
+        <div id="voiceStep" class="hidden">
+          <div class="voice-step-box">
+            <p class="section-copy">
+              Read each shown sentence clearly and record your voice template.
+            </p>
+
+            <p id="voiceChallengePrompt" class="status-line">
+              Okunacak metin burada gorunecek.
+            </p>
+            <p id="voiceSampleProgress" class="status-line">
+              Sample 1/10
+            </p>
+
+            <div class="button-row compact-actions">
+              <button class="btn" id="btnVoiceStart" type="button">Record Read-Aloud Sample</button>
+            </div>
+
+            <div class="button-row compact-actions">
+              <span class="status-line" id="voiceTranscriptPreview">Waiting for phrase...</span>
+            </div>
+
+            <audio id="audioPreview" class="hidden audio-preview" controls></audio>
+
+            <p id="voiceStatus" class="status-line">Ready.</p>
+          </div>
+
+          <div class="button-row compact-actions">
+            <button class="btn" id="btnBackToFace" type="button">Back to Face</button>
+            <button class="btn" id="btnGoComplete" type="button">Finish Enrollment</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: COMPLETE -->
+        <div id="completeStep" class="hidden">
+          <div class="complete-box">
+            <h3>Enrollment Completed</h3>
+            <p class="section-copy">
+              Your biometric enrollment steps have been completed. You can now return to the dashboard or continue to identity verification.
+            </p>
+
+            <p id="completeStatus" class="status-line">Ready.</p>
+          </div>
+
+          <div class="button-row compact-actions">
+            <a class="btn back-link-btn" href="../portal/dashboard_portal.html">Back to Dashboard</a>
+            <a class="btn back-link-btn" href="../biometric/identify.html">Go to Verification</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="../../assets/js/index.js?v=20260314-liveness-preview"></script>
+  </body>
+</html>

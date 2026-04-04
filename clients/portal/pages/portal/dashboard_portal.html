@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Portal Dashboard</title>
+
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+  <link rel="stylesheet" href="../../assets/css/dashboard.css" />
+</head>
+
+<body class="dashboard-body">
+
+<div class="dashboard-layout">
+
+<!-- SIDEBAR -->
+
+<aside class="sidebar">
+
+<div class="sidebar-top">
+
+<div class="sidebar-logo">
+<div class="sidebar-logo-mark">U</div>
+
+<div>
+<h2>Öğrenci<br>Portalı</h2>
+<p>Biometric Access</p>
+</div>
+
+</div>
+
+<div class="sidebar-user-card">
+
+<div class="sidebar-avatar">U</div>
+
+<div>
+<h3 id="sidebarUsername">User</h3>
+<p id="sidebarRole">role</p>
+</div>
+
+</div>
+
+<nav class="sidebar-menu">
+
+<button class="sidebar-link active" id="navHome">
+Home
+</button>
+
+<button class="sidebar-link" id="navProfile">
+Profile
+</button>
+
+<button class="sidebar-link" id="navEnroll">
+Enroll Biometrics
+</button>
+
+<button class="sidebar-link" id="navVerify">
+Verify Identity
+</button>
+
+<button class="sidebar-link" id="navLogs">
+Audit Logs
+</button>
+
+<button class="sidebar-link logout" id="navLogout">
+Logout
+</button>
+
+</nav>
+
+</div>
+
+</aside>
+
+<!-- MAIN -->
+
+<main class="dashboard-main">
+
+<header class="dashboard-header">
+
+<div class="dashboard-header-left">
+
+<button class="header-icon-btn">☰</button>
+
+<button class="header-icon-btn">⌕</button>
+
+</div>
+
+<div class="dashboard-header-right">
+
+<button class="header-top-icon">◎</button>
+
+<button class="header-top-icon">▭</button>
+
+<button class="header-top-icon">⇥</button>
+
+</div>
+
+</header>
+
+<section class="dashboard-grid">
+
+<article class="dashboard-card hero-card">
+
+<h2>Welcome</h2>
+
+<p id="welcomeText">
+Welcome to the biometric student portal.
+</p>
+
+</article>
+
+<article class="dashboard-card status-card">
+
+<h2>Biometric Status</h2>
+
+<div class="status-row">
+<span>Face Enrollment</span>
+<strong id="faceStatus">Not Checked</strong>
+</div>
+
+<div class="status-row">
+<span>Voice Enrollment</span>
+<strong id="voiceStatus">Not Checked</strong>
+</div>
+
+<div class="status-row">
+<span>Portal Login</span>
+<strong id="portalStatus">Active</strong>
+</div>
+
+</article>
+
+<article class="dashboard-card quick-card">
+
+<h2>Quick Actions</h2>
+
+<div class="quick-actions">
+
+<button class="quick-btn primary" id="btnQuickEnroll">
+Enroll Now
+</button>
+
+<button class="quick-btn secondary" id="btnQuickVerify">
+Verify Now
+</button>
+
+</div>
+
+</article>
+
+<article class="dashboard-card info-card">
+
+<h2>System Info</h2>
+
+<p>
+<strong>User:</strong>
+<span id="infoUsername">-</span>
+</p>
+
+<p>
+<strong>Role:</strong>
+<span id="infoRole">-</span>
+</p>
+
+<p>
+<strong>Session:</strong>
+Logged in
+</p>
+
+</article>
+
+</section>
+
+</main>
+
+</div>
+
+<script defer src="../../assets/js/dashboard.js"></script>
+
+</body>
+</html>
