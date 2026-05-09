@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.db.session import get_session
+from app.api.dependencies.auth import get_current_user
 from app.domain.schemas import (
     VerifyRequest,
     VerifyResponse,
@@ -44,6 +45,7 @@ async def login(
         {
             "sub": result["username"],
             "role": result["role"],
+            "client": x_client,
         }
     )
 
@@ -55,6 +57,26 @@ async def login(
         token_type="bearer",
     )
 
+
+@router.get("/me/biometric-status")
+async def get_my_biometric_status(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    face_template = await _auth_service._get_user_face_template(
+        session=session,
+        user_id=current_user.user_id,
+    )
+
+    voice_template = await _auth_service._get_user_voice_template(
+        session=session,
+        user_id=current_user.user_id,
+    )
+
+    return {
+        "face_enrolled": face_template is not None,
+        "voice_enrolled": voice_template is not None,
+    }
 
 @router.post("/verify", response_model=VerifyResponse)
 async def verify(

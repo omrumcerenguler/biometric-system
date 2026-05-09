@@ -27,10 +27,16 @@ async def get_current_user(
     username = payload.get("sub")
     if not username:
         raise HTTPException(status_code=401, detail="INVALID_TOKEN_PAYLOAD")
+    client = payload.get("client")
+    if not client:
+        raise HTTPException(status_code=401, detail="INVALID_TOKEN_PAYLOAD")
 
     result = await session.execute(
-        select(User).where(User.username == username)
-    )
+        select(User).where(
+            User.username == username,
+            User.client == client,
+        )
+)
     user = result.scalar_one_or_none()
 
     if user is None:

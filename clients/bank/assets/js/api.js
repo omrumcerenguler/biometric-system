@@ -217,3 +217,9 @@ export function apiVerifySecurityAnswer({ user_id, question_id, answer }) {
     }),
   });
 }
+
+export function apiGetBiometricStatus() {
+  return jsonFetch("/auth/me/biometric-status", {
+    method: "GET",
+  });
+}

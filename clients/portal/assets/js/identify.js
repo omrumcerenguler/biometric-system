@@ -45,7 +45,6 @@ export function initIdentify() {
   const btnBack = byId("btnBack");
 
   const identifyChallengePromptEl = byId("identifyChallengePrompt");
-  const identifyChallengeAnswerEl = byId("identifyChallengeAnswer");
   const livenessStatusEl = byId("livenessStatus");
 
   const btnCaptureChallengeAnswer = byId("btnCaptureChallengeAnswer");
@@ -326,7 +325,6 @@ export function initIdentify() {
       if (btnLivenessContinue) btnLivenessContinue.disabled = true;
       if (btnRefreshIdentifyChallenge)
         btnRefreshIdentifyChallenge.disabled = true;
-      if (identifyChallengeAnswerEl) identifyChallengeAnswerEl.disabled = true;
       if (btnCaptureSecurityAnswer) btnCaptureSecurityAnswer.disabled = true;
       if (securityAnswerInputEl) securityAnswerInputEl.disabled = true;
       return;
@@ -339,8 +337,6 @@ export function initIdentify() {
 
       if (identifyChallengePromptEl)
         identifyChallengePromptEl.style.display = "none";
-      if (identifyChallengeAnswerEl)
-        identifyChallengeAnswerEl.style.display = "none";
       if (btnCaptureChallengeAnswer)
         btnCaptureChallengeAnswer.style.display = "none";
       if (btnRefreshIdentifyChallenge)
@@ -367,11 +363,6 @@ export function initIdentify() {
       btnRefreshIdentifyChallenge.disabled = task !== "answer";
       btnRefreshIdentifyChallenge.style.display =
         task === "answer" ? "" : "none";
-    }
-
-    if (identifyChallengeAnswerEl) {
-      identifyChallengeAnswerEl.disabled = task !== "answer";
-      identifyChallengeAnswerEl.style.display = task === "answer" ? "" : "none";
     }
 
     if (identifyChallengePromptEl) {
@@ -472,10 +463,6 @@ export function initIdentify() {
         : [];
 
       setText(identifyChallengePromptEl, identifyChallengePrompt);
-
-      if (identifyChallengeAnswerEl) {
-        identifyChallengeAnswerEl.value = "";
-      }
 
       challengeVoiceB64 = null;
       isVoiceAnswerPassed = false;
@@ -741,7 +728,7 @@ export function initIdentify() {
 
       if (btnCaptureChallengeAnswer) btnCaptureChallengeAnswer.disabled = true;
 
-      let answerText = (identifyChallengeAnswerEl?.value || "").trim();
+      let answerText = "";
 
       const startedAt = Date.now();
       const minRecordMs = 1800;
@@ -758,9 +745,6 @@ export function initIdentify() {
           timeoutMs: 10000,
         });
 
-        if (identifyChallengeAnswerEl) {
-          identifyChallengeAnswerEl.value = answerText;
-        }
       }
 
       const elapsed = Date.now() - startedAt;
@@ -874,10 +858,6 @@ export function initIdentify() {
     }
 
     await loadIdentifyChallenge({ voiceRetryOnly: livenessOrder.length === 1 });
-  });
-
-  identifyChallengeAnswerEl?.addEventListener("input", () => {
-    updateLivenessUI();
   });
 
   btnCheckTurnRight?.addEventListener("click", async () => {
@@ -1287,7 +1267,6 @@ export function initIdentify() {
     if (identifiedUserBanner) identifiedUserBanner.style.display = "none";
     if (identifiedUserName) setText(identifiedUserName, "");
 
-    if (identifyChallengeAnswerEl) identifyChallengeAnswerEl.value = "";
     if (securityAnswerInputEl) securityAnswerInputEl.value = "";
 
     setText(identifyChallengePromptEl, "Challenge question loading.");

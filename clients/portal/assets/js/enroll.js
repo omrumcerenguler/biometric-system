@@ -497,6 +497,10 @@ export function initEnroll() {
   }
 
   function showVoiceStep() {
+    stopCamera([videoEl]);
+
+    faceCaptureRunning = false;
+    
     faceStepEl?.classList.add("hidden");
     voiceStepEl?.classList.remove("hidden");
     completeStepEl?.classList.add("hidden");
