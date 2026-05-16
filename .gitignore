@@ -1,12 +1,5 @@
-cat > .gitignore <<'EOF'
 # macOS
 .DS_Store
-
-#db
-*.db
-
-
-
 
 # Python
 __pycache__/
@@ -14,15 +7,14 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
-.dist/
-.build/
+
+# Virtual environments
 .venv/
 venv/
 backend/venv/
 
-# Env / Secrets
+# Environment / Secrets
 .env
-.env.*
 *.pem
 *.key
 
@@ -30,13 +22,43 @@ backend/venv/
 *.log
 *.log.jsonl
 
-# Node (eğer ileride olursa)
+# Pytest / Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# ML Models
+backend/models/*.pth
+backend/models/*.pt
+backend/models/*.onnx
+backend/models/*.ckpt
+backend/models/*.bin
+
+# Debug / Generated Audio
+backend/debug_*.wav
+
+# Sample biometric artifacts
+backend/sample_data/
+
+# Frontend build outputs
+dist/
+build/
+
+# Node
 node_modules/
 
 # IDE
 .vscode/
 .idea/
-EOF
-
-#roadmaps(docs)
-docs/
