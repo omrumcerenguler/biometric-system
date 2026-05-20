@@ -1,11 +1,10 @@
 """Canonical reason codes, legacy->canonical mappings and metadata.
 
-This file is a non-breaking bootstrap: it only defines constants,
-mapping tables and a helper to normalize legacy reason strings to
-the canonical reason codes. Do not import or use these helpers in
-runtime yet; they are added as a safe source-of-truth for future
-commits.
+This module defines stable canonical reason codes, mapping tables,
+metadata, and helpers used by backend routes and frontend clients to
+normalize legacy reason strings.
 """
+
 from typing import Dict
 
 # --- REASON_CODES (canonical, stable identifiers) ------------------------
@@ -55,6 +54,7 @@ AUTH_INVALID_TOKEN_PAYLOAD = "AUTH_INVALID_TOKEN_PAYLOAD"
 AUTH_USER_NOT_FOUND = "AUTH_USER_NOT_FOUND"
 AUTH_USER_INACTIVE = "AUTH_USER_INACTIVE"
 AUTH_INSUFFICIENT_PERMISSIONS = "AUTH_INSUFFICIENT_PERMISSIONS"
+AUTH_FUSION_THRESHOLD_FAILED = "AUTH_FUSION_THRESHOLD_FAILED"
 
 NET_NETWORK_ERROR = "NET_NETWORK_ERROR"
 SYS_INVALID_IMAGE = "SYS_INVALID_IMAGE"
@@ -107,6 +107,7 @@ REASON_CODES = [
     AUTH_USER_NOT_FOUND,
     AUTH_USER_INACTIVE,
     AUTH_INSUFFICIENT_PERMISSIONS,
+    AUTH_FUSION_THRESHOLD_FAILED,
     NET_NETWORK_ERROR,
     SYS_INVALID_IMAGE,
     SYS_INVALID_REFERENCE_IMAGE,
@@ -163,6 +164,7 @@ LEGACY_TO_CANONICAL: Dict[str, str] = {
 
     # auth / user legacy variants
     "USER_NOT_FOUND": AUTH_USER_NOT_FOUND,
+    "FUSION_THRESHOLD": AUTH_FUSION_THRESHOLD_FAILED,
 
     # voice processing legacy variants
     "AUDIO_TOO_SHORT": VOICE_CHALLENGE_TOO_SHORT,
@@ -368,6 +370,11 @@ REASON_META: Dict[str, Dict[str, object]] = {
     AUTH_USER_NOT_FOUND: {"category": "AUTH_ERROR", "retryable": False, "message": "User not found."},
     AUTH_USER_INACTIVE: {"category": "AUTH_ERROR", "retryable": False, "message": "User account is inactive."},
     AUTH_INSUFFICIENT_PERMISSIONS: {"category": "AUTH_ERROR", "retryable": False, "message": "Insufficient permissions."},
+    AUTH_FUSION_THRESHOLD_FAILED: {
+    "category": "AUTH_ERROR",
+    "retryable": True,
+    "message": "Combined face and voice score did not meet the verification threshold.",
+    },
     NET_NETWORK_ERROR: {"category": "NETWORK", "retryable": True, "message": "Network error. Check your connection."},
     SYS_INVALID_IMAGE: {"category": "SYSTEM", "retryable": False, "message": "Invalid image provided."},
     SYS_INVALID_REFERENCE_IMAGE: {"category": "SYSTEM", "retryable": False, "message": "Invalid reference/enrolled image."},

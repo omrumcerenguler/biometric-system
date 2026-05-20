@@ -46,6 +46,7 @@ export const CANONICAL = [
   "AUTH_USER_NOT_FOUND",
   "AUTH_USER_INACTIVE",
   "AUTH_INSUFFICIENT_PERMISSIONS",
+  "AUTH_FUSION_THRESHOLD_FAILED",
   "NET_NETWORK_ERROR",
   "SYS_INVALID_IMAGE",
   "SYS_INVALID_REFERENCE_IMAGE",
@@ -87,6 +88,9 @@ export const LEGACY_TO_CANONICAL = {
   POSE_NOT_LEFT: "ACQ_POSE_MISMATCH",
   WRONG_POSE: "ACQ_POSE_MISMATCH",
 
+  POSE_MISMATCH: "ACQ_POSE_MISMATCH",
+  REFERENCE_FACE_INVALID: "ACQ_REFERENCE_FACE_INVALID",
+
   // duplicate enrollment legacy variants
   FACE_ALREADY_REGISTERED_OTHER_USER: "ENROLL_DUPLICATE_FACE",
   VOICE_ALREADY_REGISTERED_OTHER_USER: "ENROLL_DUPLICATE_VOICE",
@@ -94,6 +98,7 @@ export const LEGACY_TO_CANONICAL = {
 
   // auth / user legacy variants
   USER_NOT_FOUND: "AUTH_USER_NOT_FOUND",
+  FUSION_THRESHOLD: "AUTH_FUSION_THRESHOLD_FAILED",
 
   // voice processing legacy variants
   AUDIO_TOO_SHORT: "VOICE_CHALLENGE_TOO_SHORT",
@@ -148,6 +153,11 @@ export const REASON_META = {
   AUTH_USER_NOT_FOUND: { category: "AUTH_ERROR", retryable: false, message: "User not found." },
   AUTH_USER_INACTIVE: { category: "AUTH_ERROR", retryable: false, message: "User account is inactive." },
   AUTH_INSUFFICIENT_PERMISSIONS: { category: "AUTH_ERROR", retryable: false, message: "Insufficient permissions." },
+  AUTH_FUSION_THRESHOLD_FAILED: {
+  category: "AUTH_ERROR",
+  retryable: true,
+  message: "Combined face and voice score did not meet the verification threshold.",
+},
   NET_NETWORK_ERROR: { category: "NETWORK", retryable: true, message: "Network error. Check your connection." },
   SYS_INVALID_IMAGE: { category: "SYSTEM", retryable: false, message: "Invalid image provided." },
   SYS_INVALID_REFERENCE_IMAGE: { category: "SYSTEM", retryable: false, message: "Invalid reference/enrolled image." },
