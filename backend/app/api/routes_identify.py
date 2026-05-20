@@ -23,6 +23,8 @@ from app.domain.schemas import (
     VerifySecurityAnswerRequest,
     VerifySecurityAnswerResponse,
 )
+from app.domain.reason_codes import normalize_reason_code
+
 router = APIRouter(prefix="/identify", tags=["identify"])
 
 _auth_service = AuthenticationService()
@@ -201,6 +203,19 @@ def _bucket_nose_ratio(nose_x_ratio: float | None) -> str | None:
         return "right"
     return "center"
 
+def _reason(value: str) -> str:
+    """Normalize failure reasons while preserving OK success status."""
+    if not value:
+        return normalize_reason_code("UNKNOWN")
+
+    raw = str(value).strip()
+
+    if raw.upper() == "OK":
+        return "OK"
+
+    return normalize_reason_code(raw)
+
+
 
 @router.get("/voice-challenge", response_model=VoiceChallengeResponse)
 async def get_identify_voice_challenge():
@@ -215,7 +230,7 @@ async def validate_identify_voice_challenge(req: VoiceChallengeValidateRequest):
     if len(normalized.split()) < 4:
         return {
             "passed": False,
-            "reason": "TOO_SHORT",
+            "reason": _reason("TOO_SHORT"),
         }
 
     expected_keywords = [_normalize_text(k) for k in (req.expected_keywords or []) if k]
@@ -234,7 +249,7 @@ async def validate_identify_voice_challenge(req: VoiceChallengeValidateRequest):
 
     return {
         "passed": passed,
-        "reason": "OK" if passed else "CHALLENGE_ANSWER_INVALID",
+        "reason": "OK" if passed else _reason("CHALLENGE_ANSWER_INVALID"),
         "keyword_hits": keyword_hits,
         "number_hits": number_hits,
         "total_hits": total_hits,
@@ -268,7 +283,7 @@ async def identify_pose_check(
             "passed": False,
             "required_turn": required,
             "detected_turn": None,
-            "reason": "MULTIPLE_FACES_DETECTED",
+            "reason": _reason("MULTIPLE_FACES_DETECTED"),
             "face_count": face_count,
         }
 
@@ -278,7 +293,7 @@ async def identify_pose_check(
             "passed": False,
             "required_turn": required,
             "detected_turn": None,
-            "reason": "NO_FACE_DETECTED",
+            "reason": _reason("NO_FACE_DETECTED"),
         }
 
     if req.require_eyes_open:
@@ -288,14 +303,14 @@ async def identify_pose_check(
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": None,
-                "reason": "EYES_CLOSED",
+                "reason": _reason("EYES_CLOSED"),
             }
         if eyes_open is None:
             return {
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": None,
-                "reason": "EYES_NOT_CLEAR",
+                "reason": _reason("EYES_NOT_CLEAR"),
             }
 
     similarity = None
@@ -314,7 +329,7 @@ async def identify_pose_check(
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": None,
-                "reason": "REFERENCE_FACE_INVALID",
+                "reason": _reason("REFERENCE_FACE_INVALID"),
             }
 
     detected = _bucket_nose_ratio(nose_x)
@@ -333,7 +348,7 @@ async def identify_pose_check(
             "passed": False,
             "required_turn": required,
             "detected_turn": detected,
-            "reason": "POSE_NOT_ENOUGH_TURN" if detected == "center" and required in {"left", "right"} else "POSE_MISMATCH",
+            "reason": _reason("POSE_NOT_ENOUGH_TURN") if detected == "center" and required in {"left", "right"} else _reason("POSE_MISMATCH"),
             "similarity": None,
             "reference_similarity": None,
             "reference_nose_x": reference_nose_x,
@@ -347,7 +362,7 @@ async def identify_pose_check(
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": detected,
-                "reason": "FACE_NOT_FRONTAL_ENOUGH",
+                "reason": _reason("FACE_NOT_FRONTAL_ENOUGH"),
                 "similarity": None,
                 "reference_similarity": None,
                 "reference_nose_x": reference_nose_x,
@@ -359,7 +374,7 @@ async def identify_pose_check(
             "passed": False,
             "required_turn": required,
             "detected_turn": "center",
-            "reason": "POSE_NOT_ENOUGH_TURN",
+            "reason": _reason("POSE_NOT_ENOUGH_TURN"),
             "similarity": None,
             "reference_similarity": None,
             "reference_nose_x": reference_nose_x,
@@ -373,7 +388,7 @@ async def identify_pose_check(
             "passed": False,
             "required_turn": required,
             "detected_turn": "center",
-            "reason": "POSE_NOT_ENOUGH_TURN",
+            "reason": _reason("POSE_NOT_ENOUGH_TURN"),
             "similarity": None,
             "reference_similarity": None,
             "reference_nose_x": reference_nose_x,
@@ -407,7 +422,7 @@ async def identify_pose_check(
                 "passed": False,
                 "required_turn": required,
                 "detected_turn": detected,
-                "reason": "FACE_MISMATCH",
+                "reason": _reason("FACE_MISMATCH"),
                 "similarity": template_similarity,
                 "reference_similarity": None,
                 "threshold": pose_identity_thr,
@@ -420,7 +435,7 @@ async def identify_pose_check(
         "passed": True,
         "required_turn": required,
         "detected_turn": detected,
-        "reason": "OK",
+        "reason": "OK",    
         "similarity": template_similarity if template_similarity is not None else similarity,
         "reference_similarity": similarity,
         "reference_nose_x": reference_nose_x,
@@ -460,7 +475,7 @@ async def identify_blink_check(
             if sim < float(settings.FACE_POSE_IDENTITY_THRESHOLD):
                 return {
                     "passed": False,
-                    "reason": "FACE_MISMATCH",
+                    "reason": _reason("FACE_MISMATCH"),
                     "similarity": sim,
                     "threshold": float(settings.FACE_POSE_IDENTITY_THRESHOLD),
                 }
@@ -475,7 +490,7 @@ async def identify_blink_check(
             if sim < float(settings.FACE_POSE_IDENTITY_THRESHOLD):
                 return {
                     "passed": False,
-                    "reason": "FACE_MISMATCH",
+                    "reason": _reason("FACE_MISMATCH"),
                     "similarity": sim,
                     "threshold": float(settings.FACE_POSE_IDENTITY_THRESHOLD),
                 }
@@ -499,7 +514,7 @@ async def identify_blink_check(
     if valid_frames < 4 or not ear_values:
         return {
             "passed": False,
-            "reason": "EYES_NOT_CLEAR",
+            "reason": _reason("EYES_NOT_CLEAR"),
             "valid_frames": valid_frames,
         }
 
@@ -508,7 +523,7 @@ async def identify_blink_check(
     if baseline_ear <= 1e-6:
         return {
             "passed": False,
-            "reason": "EYES_NOT_CLEAR",
+            "reason": _reason("EYES_NOT_CLEAR"),
             "valid_frames": valid_frames,
         }
 
@@ -520,7 +535,7 @@ async def identify_blink_check(
 
     return {
         "passed": passed,
-        "reason": "OK" if passed else "BLINK_NOT_DETECTED",
+        "reason": "OK" if passed else _reason("BLINK_NOT_DETECTED"),
         "valid_frames": valid_frames,
         "baseline_ear": baseline_ear,
         "min_ear": min_ear,
@@ -547,12 +562,15 @@ async def identify(
             face_img=img,
             client=x_client
         )
+        identified = result.get("identified", False)
+        raw_reason = result.get("reason", "OK" if identified else "UNKNOWN")
+
         return IdentifyFaceResponse(
-            identified=result.get("identified", False),
+            identified=identified,
             user_id=result.get("user_id"),
             username=result.get("username"),
             similarity=result.get("similarity", 0.0),
-            reason=result.get("reason", "UNKNOWN"),
+            reason=raw_reason if identified else _reason(raw_reason),
             yaw=result.get("yaw"),
             blur_score=result.get("blur_score"),
             bbox_size=result.get("bbox_size"),
