@@ -1,4 +1,5 @@
 import { byId, setText } from "./dom.js";
+import { normalizeReasonCode } from "./reason-codes.js";
 import {
   startCamera,
   stopCamera,
@@ -569,44 +570,45 @@ export function initIdentify() {
         identifiedUser = null;
         setFlowDebug(idRes);
 
-        const reason = (idRes?.reason || "").toUpperCase();
+        const reason = String(idRes?.reason || "").toUpperCase();
+        const canonicalReason = normalizeReasonCode(reason);
 
-        if (reason === "EYES_CLOSED") {
+        if (canonicalReason === "ACQ_EYES_CLOSED") {
           setFaceStatus(
             "Eyes look closed. Please keep your eyes open and try again.",
           );
           return;
         }
 
-        if (reason === "NO_FACE_DETECTED") {
+        if (canonicalReason === "ACQ_NO_FACE") {
           setFaceStatus(
             "Face not detected clearly. Please center your full face in frame.",
           );
           return;
         }
 
-        if (reason === "MULTIPLE_FACES_DETECTED") {
+        if (canonicalReason === "ACQ_MULTIPLE_FACES") {
           setFaceStatus(
             "Multiple faces detected. Keep only one face in frame.",
           );
           return;
         }
 
-        if (reason === "FACE_NOT_FRONTAL") {
+        if (canonicalReason === "ACQ_FACE_NOT_FRONTAL") {
           setFaceStatus(
             "Please look straight at the camera (frontal face required).",
           );
           return;
         }
 
-        if (reason === "EYES_NOT_CLEAR") {
+        if (canonicalReason === "ACQ_EYES_NOT_CLEAR") {
           setFaceStatus(
             "Eye state is not clear. Keep your full face visible and eyes open.",
           );
           return;
         }
 
-        if (reason === "NO_MATCH") {
+        if (canonicalReason === "ACQ_FACE_MISMATCH") {
           setFaceStatus(
             "Face not matched. Look straight at camera and try again.",
           );
@@ -770,7 +772,9 @@ export function initIdentify() {
           v?.reason || "CHALLENGE_ANSWER_INVALID",
         ).toUpperCase();
 
-        if (reason === "TOO_SHORT") {
+        const canonicalReason = normalizeReasonCode(reason);
+
+        if (canonicalReason === "VOICE_CHALLENGE_TOO_SHORT") {
           setLivenessStatus(
             "Cumle cok kisa algilandi. Ekrandaki cumleyi tam ve net sekilde tekrar okuyun.",
           );
@@ -903,8 +907,9 @@ export function initIdentify() {
           ((res?.detected_turn || "none") === "none"
             ? "POSE_NOT_RIGHT"
             : `DETECTED_${String(res?.detected_turn || "none").toUpperCase()}`);
+        const canonicalReason = normalizeReasonCode(reason);
 
-        if (String(reason).toUpperCase() === "POSE_NOT_ENOUGH_TURN") {
+        if (canonicalReason === "ACQ_POSE_NOT_ENOUGH_TURN") {
           setLivenessStatus(
             "RIGHT turn yetersiz. Basini biraz daha saga cevirip tekrar dene.",
           );
@@ -988,8 +993,9 @@ export function initIdentify() {
           ((res?.detected_turn || "none") === "none"
             ? "POSE_NOT_LEFT"
             : `DETECTED_${String(res?.detected_turn || "none").toUpperCase()}`);
+        const canonicalReason = normalizeReasonCode(reason);
 
-        if (String(reason).toUpperCase() === "POSE_NOT_ENOUGH_TURN") {
+        if (canonicalReason === "ACQ_POSE_NOT_ENOUGH_TURN") {
           setLivenessStatus(
             "LEFT turn yetersiz. Basini biraz daha sola cevirip tekrar dene.",
           );
@@ -1074,8 +1080,9 @@ export function initIdentify() {
         const reason = String(
           res?.reason || "BLINK_NOT_DETECTED",
         ).toUpperCase();
+        const canonicalReason = normalizeReasonCode(reason);
 
-        if (reason === "BLINK_NOT_DETECTED") {
+        if (canonicalReason === "ACQ_BLINK_NOT_DETECTED") {
           setLivenessStatus(
             "Blink algilanamadi. Gozlerinizi bir kez belirgin sekilde kirpip tekrar deneyin.",
           );
@@ -1169,11 +1176,12 @@ export function initIdentify() {
 
       const decision = String(res.decision || "").toUpperCase();
       const reason = String(res.reason || "UNKNOWN").toUpperCase();
+      const canonicalReason = normalizeReasonCode(reason);
 
       if (
         decision !== "ACCEPTED" &&
         decision !== "GRANTED" &&
-        reason === "VOICE_NOT_MATCHED"
+        canonicalReason === "VOICE_NOT_MATCHED"
       ) {
         await handleVoiceVerifyFailure(reason, res);
         return;
