@@ -1,4 +1,5 @@
 import { byId, setText } from "./dom.js";
+import { normalizeReasonCode } from "./reason-codes.js";
 import {
   startCamera,
   stopCamera,
@@ -155,6 +156,95 @@ export function initEnroll() {
   function setVoiceStatus(msg) {
     setText(voiceStatusEl, msg);
     console.log("[VOICE]", msg);
+  }
+
+  function faceEnrollmentRejectMessage(canonicalReason, rawReason, currentRequiredAngle) {
+    const angle = String(currentRequiredAngle || "").toUpperCase();
+    const raw = rawReason || "WRONG_POSE";
+
+    if (canonicalReason === "ACQ_NO_FACE") {
+      return "Face not detected clearly. Please center your full face in frame.";
+    }
+
+    if (canonicalReason === "ACQ_MULTIPLE_FACES") {
+      return "Multiple faces detected. Keep only one face in frame.";
+    }
+
+    if (canonicalReason === "ACQ_FACE_NOT_FRONTAL") {
+      return "Please look straight at the camera for the center capture.";
+    }
+
+    if (canonicalReason === "ACQ_FACE_YAW_OUT_OF_RANGE") {
+      return `Rejected frame for ${angle}: face angle is outside the allowed range.`;
+    }
+
+    if (canonicalReason === "ACQ_FACE_TOO_SMALL") {
+      return "Face is too small in frame. Move closer to the camera.";
+    }
+
+    if (canonicalReason === "ACQ_FACE_BLURRY") {
+      return "Face appears blurry. Hold still and try again.";
+    }
+
+    if (canonicalReason === "ACQ_EYES_CLOSED") {
+      return "Eyes look closed. Please keep your eyes open.";
+    }
+
+    if (canonicalReason === "ACQ_EYES_NOT_CLEAR") {
+      return "Eyes are not clearly visible. Adjust lighting and try again.";
+    }
+
+    if (canonicalReason === "ACQ_POSE_NOT_ENOUGH_TURN") {
+      return `Rejected frame for ${angle}: turn your head a little more.`;
+    }
+
+    if (canonicalReason === "ACQ_POSE_MISMATCH") {
+      return `Rejected frame for ${angle}: wrong pose. Follow the requested direction.`;
+    }
+
+    return `Rejected frame for ${angle}: ${raw}`;
+  }
+
+  function enrollmentFailureMessage(canonicalReason, rawReason) {
+    const raw = rawReason || "ENROLLMENT_FAILED";
+
+    if (canonicalReason === "ENROLL_DUPLICATE_FACE") {
+      return "A similar face is already enrolled.";
+    }
+
+    if (canonicalReason === "ENROLL_DUPLICATE_VOICE") {
+      return "A similar voice is already enrolled.";
+    }
+
+    if (canonicalReason === "ENROLL_FACE_SAMPLES_EMPTY") {
+      return "Face samples are missing.";
+    }
+
+    if (canonicalReason === "ENROLL_VOICE_SAMPLES_EMPTY") {
+      return "Voice samples are missing.";
+    }
+
+    if (canonicalReason === "ENROLL_INSUFFICIENT_FACE_SAMPLES") {
+      return "Insufficient face samples for enrollment.";
+    }
+
+    if (canonicalReason === "ENROLL_VOICE_SAMPLES_INSUFFICIENT") {
+      return "Insufficient voice samples for enrollment.";
+    }
+
+    if (canonicalReason === "ENROLL_FACE_EMBEDDING_FAILED") {
+      return "Face processing failed during enrollment.";
+    }
+
+    if (canonicalReason === "ENROLL_VOICE_EMBEDDING_FAILED") {
+      return "Voice processing failed during enrollment.";
+    }
+
+    if (canonicalReason === "ENROLL_SAVE_ERROR") {
+      return "Failed to save enrollment. Try again later.";
+    }
+
+    return raw;
   }
 
   function sleep(ms) {
@@ -462,14 +552,15 @@ export function initEnroll() {
       normalizedStatus === "ACCEPTED" ||
       normalizedReason === "OK";
 
+    const rawReason =
+      result?.reason || result?.message || (accepted ? "OK" : `REQUIRE_${String(currentRequiredAngle).toUpperCase()}`);
+
+    const canonicalReason = accepted ? "OK" : normalizeReasonCode(String(rawReason).toUpperCase());
+
     return {
       accepted,
-      reason:
-        result?.reason ||
-        result?.message ||
-        (accepted
-          ? "OK"
-          : `REQUIRE_${String(currentRequiredAngle).toUpperCase()}`),
+      reason: rawReason,
+      canonicalReason,
       detectedAngle:
         result?.detected_angle || result?.angle || result?.pose || null,
     };
@@ -695,11 +786,13 @@ export function initEnroll() {
         }
 
         if (!poseResult.accepted) {
-          setStatus(
-            `Rejected frame for ${currentRequiredAngle.toUpperCase()}: ${
-              poseResult.reason || "WRONG_POSE"
-            }`,
+          const rejectMessage = faceEnrollmentRejectMessage(
+            poseResult.canonicalReason,
+            poseResult.reason,
+            currentRequiredAngle,
           );
+
+          setStatus(rejectMessage);
           await sleep(FACE_CAPTURE_INTERVAL_MS);
           continue;
         }
@@ -1028,10 +1121,12 @@ export function initEnroll() {
         biometricSubmitCompleted = false;
         updateStepButtons();
 
-        const rawMessage = String(response?.message || "ENROLLMENT_FAILED");
+        const rawReason = String(response?.reason || response?.message || "ENROLLMENT_FAILED").toUpperCase();
+        const canonical = normalizeReasonCode(rawReason);
+        const display = enrollmentFailureMessage(canonical, rawReason);
 
-        setStatus(`Enrollment failed: ${rawMessage}`);
-        setVoiceStatus(`Enrollment failed: ${rawMessage}`);
+        setStatus(`Enrollment failed: ${display}`);
+        setVoiceStatus(`Enrollment failed: ${display}`);
         setText(securityEnrollStatusEl, "Biometric enrollment failed.");
         return;
       }
@@ -1072,11 +1167,13 @@ export function initEnroll() {
       biometricSubmitCompleted = false;
       updateStepButtons();
 
-      const msg = e?.message || "UNKNOWN_ERROR";
+      const rawReason = String(e?.message || "UNKNOWN_ERROR").toUpperCase();
+      const canonical = normalizeReasonCode(rawReason);
+      const display = enrollmentFailureMessage(canonical, rawReason);
 
-      setStatus(`Enrollment failed: ${msg}`);
-      setVoiceStatus(`Enrollment failed: ${msg}`);
-      setText(securityEnrollStatusEl, `Security save failed: ${msg}`);
+      setStatus(`Enrollment failed: ${display}`);
+      setVoiceStatus(`Enrollment failed: ${display}`);
+      setText(securityEnrollStatusEl, `Security save failed: ${display}`);
     }
   });
 
