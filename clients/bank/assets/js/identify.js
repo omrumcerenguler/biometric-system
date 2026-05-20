@@ -249,6 +249,16 @@ export function initIdentify() {
     return "-";
   }
 
+  function getStepOrderMismatchMessage() {
+    const label = taskLabel(currentTask());
+
+    if (label && label !== "-") {
+      return `Bu adımı şu anda yapamazsınız. Lütfen önce sıradaki adımı tamamlayın: ${label}`;
+    }
+
+    return "Doğrulama adımı hazırlanamadı. Lütfen ekrandaki yönlendirmeyi takip ederek tekrar deneyin.";
+  }
+
   function currentTask() {
     return livenessOrder[livenessStepIndex] || null;
   }
@@ -291,9 +301,7 @@ export function initIdentify() {
 
   function stepDone(task) {
     if (currentTask() !== task) {
-      setLivenessStatus(
-        `Sira hatasi. Simdi yapman gereken: ${taskLabel(currentTask())}`,
-      );
+      setLivenessStatus(getStepOrderMismatchMessage());
 
       setFlowDebug(
         flowStepName(currentTask()),
@@ -711,9 +719,7 @@ export function initIdentify() {
       }
 
       if (currentTask() !== "answer") {
-        setLivenessStatus(
-          `Sira hatasi. Simdi yapman gereken: ${taskLabel(currentTask())}`,
-        );
+        setLivenessStatus(getStepOrderMismatchMessage());
         setFlowDebug(
           flowStepName(currentTask()),
           "failed",
@@ -873,9 +879,7 @@ export function initIdentify() {
       }
 
       if (currentTask() !== "turn_right") {
-        setLivenessStatus(
-          `Sira hatasi. Simdi yapman gereken: ${taskLabel(currentTask())}`,
-        );
+        setLivenessStatus(getStepOrderMismatchMessage());
 
         setFlowDebug(
           flowStepName(currentTask()),
@@ -959,9 +963,7 @@ export function initIdentify() {
       }
 
       if (currentTask() !== "turn_left") {
-        setLivenessStatus(
-          `Sira hatasi. Simdi yapman gereken: ${taskLabel(currentTask())}`,
-        );
+        setLivenessStatus(getStepOrderMismatchMessage());
 
         setFlowDebug(
           flowStepName(currentTask()),
@@ -1045,9 +1047,7 @@ export function initIdentify() {
       }
 
       if (currentTask() !== "blink") {
-        setLivenessStatus(
-          `Sira hatasi. Simdi yapman gereken: ${taskLabel(currentTask())}`,
-        );
+        setLivenessStatus(getStepOrderMismatchMessage());
 
         setFlowDebug(
           flowStepName(currentTask()),
