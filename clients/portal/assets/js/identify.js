@@ -263,6 +263,22 @@ export function initIdentify() {
     return livenessOrder[livenessStepIndex] || null;
   }
 
+  function logLivenessState(eventName, extra = {}) {
+    console.warn(`[LIVENESS_DIAG] ${eventName}`, {
+      currentTask: currentTask(),
+      livenessOrder: [...livenessOrder],
+      livenessStepIndex,
+      isFaceStepPassed,
+      securityAnswerOk,
+      isVoiceAnswerPassed,
+      isVoiceRetryMode,
+      voiceVerifyAttempts,
+      identifyChallengeId,
+      timestamp: Date.now(),
+      ...extra,
+    });
+  }
+
   function shuffledTasks(tasks) {
     const arr = [...tasks];
 
@@ -287,6 +303,7 @@ export function initIdentify() {
     isVoiceRetryMode = false;
 
     setFlowDebug("liveness_order", "info", livenessOrder.join(" -> "));
+    logLivenessState("INIT_SEQUENTIAL_ORDER");
     updateLivenessUI();
   }
 
@@ -296,11 +313,19 @@ export function initIdentify() {
     isVoiceAnswerPassed = false;
     isVoiceRetryMode = true;
 
+    logLivenessState("INIT_VOICE_RETRY_ORDER");
     updateLivenessUI();
   }
 
   function stepDone(task) {
+    logLivenessState("STEP_DONE_ATTEMPT", { task });
+
     if (currentTask() !== task) {
+      logLivenessState("STEP_ORDER_MISMATCH_IN_STEP_DONE", {
+        attemptedTask: task,
+        expectedTask: currentTask(),
+      });
+
       setLivenessStatus(getStepOrderMismatchMessage());
 
       setFlowDebug(
@@ -704,6 +729,8 @@ export function initIdentify() {
 
   btnCaptureChallengeAnswer?.addEventListener("click", async () => {
     try {
+      logLivenessState("VOICE_CHALLENGE_CLICK");
+
       if (!securityAnswerOk) {
         setLivenessStatus("Once guvenlik sorusunu dogru cevaplayin.");
         setFlowDebug("voice_answer", "failed", "SECURITY_ANSWER_REQUIRED");
@@ -871,6 +898,8 @@ export function initIdentify() {
 
   btnCheckTurnRight?.addEventListener("click", async () => {
     try {
+      logLivenessState("TURN_RIGHT_CLICK");
+
       if (!isFaceStepPassed) {
         setLivenessStatus("Bu adim icin once face adimi tamamlanmali.");
         setFlowDebug("turn_right", "failed", "FACE_STEP_REQUIRED");
@@ -897,12 +926,20 @@ export function initIdentify() {
         return;
       }
 
+      logLivenessState("TURN_RIGHT_REQUEST_START");
+
       const res = await apiIdentifyPoseCheck(
         frame,
         "right",
         faceB64,
         identifiedUserId,
       );
+
+      logLivenessState("TURN_RIGHT_RESPONSE_RECEIVED", {
+        passed: res?.passed,
+        reason: res?.reason,
+        detectedTurn: res?.detected_turn,
+      });
 
       if (!res?.passed) {
         const reason =
@@ -955,6 +992,8 @@ export function initIdentify() {
 
   btnCheckTurnLeft?.addEventListener("click", async () => {
     try {
+      logLivenessState("TURN_LEFT_CLICK");
+
       if (!isFaceStepPassed) {
         setLivenessStatus("Bu adim icin once face adimi tamamlanmali.");
         setFlowDebug("turn_left", "failed", "FACE_STEP_REQUIRED");
@@ -981,12 +1020,20 @@ export function initIdentify() {
         return;
       }
 
+      logLivenessState("TURN_LEFT_REQUEST_START");
+
       const res = await apiIdentifyPoseCheck(
         frame,
         "left",
         faceB64,
         identifiedUserId,
       );
+
+      logLivenessState("TURN_LEFT_RESPONSE_RECEIVED", {
+        passed: res?.passed,
+        reason: res?.reason,
+        detectedTurn: res?.detected_turn,
+      });
 
       if (!res?.passed) {
         const reason =
@@ -1039,6 +1086,8 @@ export function initIdentify() {
 
   btnCheckBlink?.addEventListener("click", async () => {
     try {
+      logLivenessState("BLINK_CLICK");
+
       if (!isFaceStepPassed) {
         setLivenessStatus("Bu adim icin once face adimi tamamlanmali.");
         setFlowDebug("blink", "failed", "FACE_STEP_REQUIRED");
@@ -1069,11 +1118,19 @@ export function initIdentify() {
         return;
       }
 
+      logLivenessState("BLINK_REQUEST_START");
+
       const res = await apiIdentifyBlinkCheck(
         frames,
         faceB64,
         identifiedUserId,
       );
+
+      logLivenessState("BLINK_RESPONSE_RECEIVED", {
+        passed: res?.passed,
+        reason: res?.reason,
+        validFrames: res?.valid_frames,
+      });
 
       if (!res?.passed) {
         const reason = String(
@@ -1238,6 +1295,8 @@ export function initIdentify() {
   });
 
   function restart() {
+    logLivenessState("RESTART_CALLED");
+
     stopCamera([videoEl, livenessVideoEl]);
 
     faceB64 = null;
@@ -1298,6 +1357,11 @@ export function initIdentify() {
 
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
+      logLivenessState("PAGESHOW_RESTART", {
+        persisted: event.persisted,
+        navigationType: undefined,
+      });
+
       restart();
       return;
     }
@@ -1305,6 +1369,11 @@ export function initIdentify() {
     const navEntry = performance.getEntriesByType("navigation")[0];
 
     if (navEntry && navEntry.type === "back_forward") {
+      logLivenessState("PAGESHOW_RESTART", {
+        persisted: event.persisted,
+        navigationType: navEntry?.type,
+      });
+
       restart();
     }
   });
