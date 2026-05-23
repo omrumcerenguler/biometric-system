@@ -65,3 +65,9 @@ node_modules/
 
 # not tracked files
 notTrack/
+
+
+# AASIST local calibration audio files
+backend/test_audio_spoof/
+backend/test_audio_spoof_results.csv
+
