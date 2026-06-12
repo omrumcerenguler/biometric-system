@@ -71,3 +71,4 @@ notTrack/
 backend/test_audio_spoof/
 backend/test_audio_spoof_results.csv
 
+debug_verify.wav
