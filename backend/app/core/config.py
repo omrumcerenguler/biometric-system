@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     VOICE_TEMPLATE_UPDATE_THRESHOLD: float = 0.70
     FACE_LIVENESS_THRESHOLD: float = 0.80
     VOICE_LIVENESS_THRESHOLD: float = 0.70
-    FUSION_PASS_THRESHOLD: float = 0.70
+    FUSION_PASS_THRESHOLD: float = 0.75
 
     # JWT Settings
     SECRET_KEY: str = "dev-secret-key-change-this"
