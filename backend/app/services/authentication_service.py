@@ -14,6 +14,7 @@ from app.services.face_processor import FaceProcessor
 from app.services.fusion import fuse
 from app.services.voice_processor import VoiceProcessor, VoiceFeatures
 from app.services.voice_spoof_detector import VoiceSpoofDetector, SpoofDetectionResult
+from app.core.security import verify_password
 
 import io
 import soundfile as sf
@@ -258,7 +259,7 @@ class AuthenticationService:
                 "message": "USER_INACTIVE",
             }
 
-        if user.password_hash != password:
+        if not verify_password(password, user.password_hash):
             return {
                 "success": False,
                 "message": "INVALID_PASSWORD",

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from app.core.config import settings
 import bcrypt
+import re
 
 def _load_fernet(key_b64: str) -> Fernet:
     if not key_b64:
@@ -95,3 +96,35 @@ def verify_security_answer(input_answer: str, stored_hash: str) -> bool:
         normalized.encode("utf-8"),
         stored_hash.encode("utf-8")
     )
+
+BCRYPT_PASSWORD_RE = re.compile(r"^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$")
+
+
+def is_password_hash(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    return bool(BCRYPT_PASSWORD_RE.match(value))
+
+
+def hash_password(password: str) -> str:
+    if password is None:
+        raise ValueError("Password cannot be None")
+
+    password_bytes = password.encode("utf-8")
+    hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
+    return hashed.decode("utf-8")
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    if not isinstance(password, str) or not isinstance(stored_hash, str):
+        return False
+
+    if not is_password_hash(stored_hash):
+        return False
+
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+    
+    

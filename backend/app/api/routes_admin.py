@@ -8,7 +8,7 @@ from app.api.dependencies.auth import require_admin
 from app.db.models import User
 from app.db.session import get_session
 from app.domain.schemas import CreateUserRequest, CreateUserResponse
-
+from app.core.security import hash_password
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -28,7 +28,7 @@ async def create_user(
 
     new_user = User(
         username=req.username,
-        password_hash=req.password,
+        password_hash=hash_password(req.password),
         role=req.role,
         client=req.client,
         is_active=True,
