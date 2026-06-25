@@ -14,8 +14,7 @@ from app.services.face_processor import FaceProcessor
 from app.services.fusion import fuse
 from app.services.voice_processor import VoiceProcessor, VoiceFeatures
 from app.services.voice_spoof_detector import VoiceSpoofDetector, SpoofDetectionResult
-from app.core.security import verify_password
-
+from app.core.security import verify_password, encrypt_feature_blob, decrypt_feature_blob
 import io
 import soundfile as sf
 
@@ -27,6 +26,10 @@ FACE_TEMPLATE_TYPE_BY_POSE = {
     "right": "face_feature_right",
 }
 LEGACY_FACE_TEMPLATE_TYPE = "face_feature"
+
+def feature_blob_to_vector(blob: bytes) -> np.ndarray:
+    raw_blob = decrypt_feature_blob(blob)
+    return np.frombuffer(raw_blob, dtype=np.float32)
 
 
 class AuthenticationService:
@@ -70,7 +73,7 @@ class AuthenticationService:
         best_user = None
         best_user_id = None
         for other_face, other_user in result_all.all():
-            other_vec = np.frombuffer(other_face.enc_feature_blob, dtype=np.float32)
+            other_vec = feature_blob_to_vector(other_face.enc_feature_blob)
             other_vec = self._l2norm(other_vec)
             sim = self._cosine(self._l2norm(face_vec), other_vec)
             logger.info(f"[PRECHECK_FACE_SIM] enrolling_user={user.username} db_user={other_user.username} sim={sim:.4f}")
@@ -129,7 +132,7 @@ class AuthenticationService:
         best_user = None
         best_user_id = None
         for other_voice, other_user in result_all.all():
-            other_vec = np.frombuffer(other_voice.enc_feature_blob, dtype=np.float32)
+            other_vec = feature_blob_to_vector(other_voice.enc_feature_blob)
             other_vec = self._l2norm(other_vec)
             sim = self._cosine(self._l2norm(voice_vec), other_vec)
             logger.info(f"[PRECHECK_VOICE_SIM] enrolling_user={user.username} db_user={other_user.username} sim={sim:.4f}")
@@ -354,13 +357,13 @@ class AuthenticationService:
         existing = await self._get_biometric_row(session, user_id, bio_type)
 
         if existing:
-            existing.enc_feature_blob = blob
+            existing.enc_feature_blob = encrypt_feature_blob(blob)
             return
 
         session.add(
             BiometricData(
                 type=bio_type,
-                enc_feature_blob=blob,
+                enc_feature_blob=encrypt_feature_blob(blob),
                 user_id=user_id,
             )
         )
@@ -407,7 +410,7 @@ class AuthenticationService:
             )
 
             for other_face, other_user in result_all.all():
-                other_vec = np.frombuffer(other_face.enc_feature_blob, dtype=np.float32)
+                other_vec = feature_blob_to_vector(other_face.enc_feature_blob)
                 other_vec = self._l2norm(other_vec)
                 sim = self._cosine(normalized_vec, other_vec)
 
@@ -534,7 +537,7 @@ class AuthenticationService:
         )
 
         for other_voice, other_user in result_all.all():
-            other_vec = np.frombuffer(other_voice.enc_feature_blob, dtype=np.float32)
+            other_vec = feature_blob_to_vector(other_voice.enc_feature_blob)
             other_vec = self._l2norm(other_vec)
             sim = self._cosine(v, other_vec)
 
@@ -550,7 +553,7 @@ class AuthenticationService:
         existing = await self._get_biometric_row(session, user.user_id, "voice_feature")
 
         if existing:
-            old_v = np.frombuffer(existing.enc_feature_blob, dtype=np.float32)
+            old_v = feature_blob_to_vector(existing.enc_feature_blob)
             old_v = self._l2norm(old_v)
             sim = self._cosine(v, old_v)
 
@@ -569,7 +572,7 @@ class AuthenticationService:
                     "user_id": user.user_id,
                 }
 
-            existing.enc_feature_blob = blob
+            existing.enc_feature_blob = encrypt_feature_blob(blob)
             return {
                 "status": "VOICE_UPDATED",
                 "similarity": float(sim),
@@ -579,7 +582,7 @@ class AuthenticationService:
         session.add(
             BiometricData(
                 type="voice_feature",
-                enc_feature_blob=blob,
+                enc_feature_blob=encrypt_feature_blob(blob),
                 user_id=user.user_id,
             )
         )
@@ -603,7 +606,7 @@ class AuthenticationService:
         if not bio or not bio.enc_feature_blob:
             return None
 
-        vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+        vec = feature_blob_to_vector(bio.enc_feature_blob)
         if vec.size == 0:
             return None
 
@@ -633,7 +636,7 @@ class AuthenticationService:
             if not bio or not bio.enc_feature_blob:
                 continue
 
-            vec = np.frombuffer(bio.enc_feature_blob, dtype=np.float32)
+            vec = feature_blob_to_vector(bio.enc_feature_blob)
             if vec.size == 0:
                 continue
 
@@ -668,7 +671,7 @@ class AuthenticationService:
         if not preferred or not preferred.enc_feature_blob:
             return None
 
-        vec = np.frombuffer(preferred.enc_feature_blob, dtype=np.float32)
+        vec = feature_blob_to_vector(preferred.enc_feature_blob)
         if vec.size == 0:
             return None
 
